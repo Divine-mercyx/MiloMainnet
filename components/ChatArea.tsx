@@ -24,6 +24,11 @@ const INITIAL_GREETING: Message = {
 
 const API_KEY = import.meta.env.VITE_AI_API_KEY;
 
+// Add a check for the API key
+if (!API_KEY) {
+  console.warn("VITE_AI_API_KEY is not set. AI features will be disabled.");
+}
+
 interface ChatAreaProps {
   sessionId?: string | null; // If null, it's a new chat. If string, load that chat.
   contacts: any[]; // Receive contacts as props
@@ -50,13 +55,18 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ sessionId, contacts, resolve
   
     useEffect(() => {
         const initAI = async () => {
-            try {
-                const processor = new AIProcessor(API_KEY);
-                await processor.initialize();
-                setAiProcessor(processor);
-                console.log("AI Processor initialized successfully!");
-            } catch (error) {
-                console.error("Failed to initialize AI processor:", error);
+            // Only initialize if API key is available
+            if (API_KEY) {
+                try {
+                    const processor = new AIProcessor(API_KEY);
+                    await processor.initialize();
+                    setAiProcessor(processor);
+                    console.log("AI Processor initialized successfully!");
+                } catch (error) {
+                    console.error("Failed to initialize AI processor:", error);
+                }
+            } else {
+                console.warn("Skipping AI processor initialization - no API key available");
             }
         };
         

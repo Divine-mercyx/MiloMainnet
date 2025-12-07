@@ -7,8 +7,9 @@ import {
 } from "@google/genai";
 import { Message, Sender, MessageType } from "../types";
 
-// Initialize Gemini Client
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Initialize Gemini Client with a fallback
+const apiKey = process.env.API_KEY || import.meta.env.VITE_AI_API_KEY;
+const ai = new GoogleGenAI({ apiKey });
 
 const SYSTEM_INSTRUCTION = `
 You are MYLO, a helpful, intelligent, and friendly AI assistant for a crypto wallet.

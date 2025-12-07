@@ -30,6 +30,11 @@ import { useConnectWallet, useWallets } from '@mysten/dapp-kit';
 const API_KEY = import.meta.env.VITE_AI_API_KEY;
 let aiProcessor: AIProcessor | null = null;
 
+// Add a check for the API key
+if (!API_KEY) {
+  console.warn("VITE_AI_API_KEY is not set. AI features will be disabled.");
+}
+
 interface LandingPageProps {
   onConnect: () => void;
 }
@@ -502,7 +507,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onConnect }) => {
                      </div>
                      <div className="mt-8 flex gap-2 flex-wrap">
                          <div className="px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-md text-sm font-medium border border-white/10">Instant Finality</div>
-                         <div className="px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-md text-sm font-medium border border-white/10">Low Gas</div>
+                         <div className="px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-md text-sm font-medium border border-white-10">Low Gas</div>
                      </div>
                  </div>
 
@@ -603,12 +608,17 @@ const LandingChatWidget: React.FC = () => {
 
     useEffect(() => {
         const initAI = async () => {
-            try {
-                aiProcessor = new AIProcessor(API_KEY);
-                await aiProcessor.initialize();
-                console.log("AI Processor initialized successfully!");
-            } catch (error) {
-                console.error("Failed to initialize AI processor:", error);
+            // Only initialize if API key is available
+            if (API_KEY) {
+                try {
+                    aiProcessor = new AIProcessor(API_KEY);
+                    await aiProcessor.initialize();
+                    console.log("AI Processor initialized successfully!");
+                } catch (error) {
+                    console.error("Failed to initialize AI processor:", error);
+                }
+            } else {
+                console.warn("Skipping AI processor initialization - no API key available");
             }
         };
         
