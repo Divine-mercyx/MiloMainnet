@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Add Contact</title>
+</head>
+<body>
+    <h1>Add Contact to localStorage</h1>
+    <script>
+        const contacts = [{ name: 'divine', address: '0x123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' }];
+        localStorage.setItem('contacts', JSON.stringify(contacts));
+        console.log('Contact added to localStorage');
+        document.body.innerHTML += '<p>Contact "divine" added to localStorage!</p>';
+    </script>
+</body>
+</html>

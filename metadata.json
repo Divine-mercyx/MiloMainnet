@@ -1,0 +1,7 @@
+{
+  "name": "MYLO Conversational Wallet",
+  "description": "A futuristic, conversational AI wallet interface for managing assets and minting NFTs.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

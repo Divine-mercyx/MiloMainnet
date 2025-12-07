@@ -1,0 +1,13 @@
+[package]
+name = "milo_nft"
+edition = "2024.beta"
+license = "MIT"
+authors = ["funmi <funmilolaslimmy@gmail.com>"]
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "testnet" }
+MoveStdlib = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/move-stdlib", rev = "testnet" }
+
+[addresses]
+milo_nft = "0x0"
+sui = "0x2"

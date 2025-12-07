@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Populate Contacts</title>
+</head>
+<body>
+    <h1>Populate Contacts to localStorage</h1>
+    <button onclick="populateContacts()">Add Contact "divine"</button>
+    <p id="status"></p>
+    <script>
+        function populateContacts() {
+            const contacts = [{ 
+                id: '1', 
+                name: 'divine', 
+                address: '0x123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' 
+            }];
+            
+            try {
+                localStorage.setItem('mylo_beneficiaries', JSON.stringify(contacts));
+                document.getElementById('status').innerHTML = '<p style="color: green;">Contact "divine" added to localStorage successfully!</p>';
+                console.log('Contacts populated:', contacts);
+            } catch (e) {
+                document.getElementById('status').innerHTML = '<p style="color: red;">Error: ' + e.message + '</p>';
+                console.error('Error populating contacts:', e);
+            }
+        }
+    </script>
+</body>
+</html>
