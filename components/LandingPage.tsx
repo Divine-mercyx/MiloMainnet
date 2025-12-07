@@ -626,7 +626,20 @@ const LandingChatWidget: React.FC = () => {
     }, []);
 
     const handleSend = async () => {
-        if (!input.trim() || loading || !aiProcessor) return;
+        if (!input.trim() || loading || !aiProcessor) {
+            // If AI processor is not available, show a friendly message
+            if (!aiProcessor) {
+                setMessages(prev => [...prev, {
+                    id: (Date.now() + 1).toString(),
+                    sender: Sender.Bot,
+                    type: MessageType.Text,
+                    text: "AI features are currently unavailable. Please try again later.",
+                    timestamp: new Date()
+                }]);
+                return;
+            }
+            return;
+        }
         
         const userMsg = {
             id: Date.now().toString(),
