@@ -37,7 +37,10 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ sessionId, contacts, resolve
   const [isLoading, setIsLoading] = useState(false);
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(sessionId || null);
-  const [selectedLanguage, setSelectedLanguage] = useState('en-US');
+  const [selectedLanguage, setSelectedLanguage] = useState<string>(() => {
+    // Load saved language from localStorage or default to 'en-US'
+    return localStorage.getItem('mylo_selected_language') || 'en-US';
+  });
   const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
@@ -77,14 +80,16 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ sessionId, contacts, resolve
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (languageButtonRef.current && !languageButtonRef.current.contains(event.target as Node)) {
+      // Only close if clicking outside the language selector area
+      const languageArea = document.querySelector('.language-selector-area');
+      if (languageArea && !languageArea.contains(event.target as Node)) {
         setShowLanguageDropdown(false);
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('click', handleClickOutside);
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('click', handleClickOutside);
     };
   }, []);
 
@@ -365,7 +370,6 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ sessionId, contacts, resolve
       'ha-NG': 'ha'
     };
     
-    console.log("Mapping language code:", langCode, "to API code:", langMap[langCode] || 'en');
     return langMap[langCode] || 'en';
   };
 
@@ -405,7 +409,6 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ sessionId, contacts, resolve
       
       // Get language code for API
       const languageCode = getLanguageApiCode(selectedLanguage);
-      console.log("Using language code for transcription:", languageCode);
 
       // Transcribe using the AI processor
       const result = await aiProcessor.transcribe(audioBase64, mimeType, languageCode);
@@ -493,7 +496,6 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ sessionId, contacts, resolve
       utterance.lang = selectedLanguage;
       utterance.rate = 0.8;
       utterance.pitch = 1;
-      console.log("Speaking text in language:", selectedLanguage);
       synthRef.current.speak(utterance);
     }
   };
@@ -732,6 +734,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ sessionId, contacts, resolve
                     onChange={handleImageUpload}
                 />
                 
+                <div className="">
                 {/* Language Selector */}
                 <div className="relative">
                   <Tooltip content="Select language">
@@ -740,7 +743,10 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ sessionId, contacts, resolve
                       variant="ghost" 
                       size="icon" 
                       className="text-slate-400 hover:text-slate-700"
-                      onClick={() => setShowLanguageDropdown(!showLanguageDropdown)}
+                      onClick={(e) => {
+                        e.stopPropagation(); // Stop the click from bubbling up
+                        setShowLanguageDropdown(prev => !prev);
+                      }}
                     >
                       <Globe size={20} />
                     </Button>
@@ -748,16 +754,19 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ sessionId, contacts, resolve
                   
                   {/* Language Dropdown */}
                   {showLanguageDropdown && (
-                    <div className="absolute bottom-full left-0 mb-2 w-64 bg-white rounded-xl shadow-lg border border-slate-200 py-2 z-10">
+                    <div 
+                      className="absolute bottom-full left-0 mb-2 w-64 bg-white rounded-xl shadow-lg border border-slate-200 py-2 z-10"
+                      onClick={(e) => e.stopPropagation()} // Stop clicks inside dropdown from closing it
+                    >
                       <div className="max-h-60 overflow-y-auto">
                         {supportedLanguages.map((lang) => (
                           <button
                             key={lang.code}
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation(); // Stop propagation
                               setSelectedLanguage(lang.code);
+                              localStorage.setItem('mylo_selected_language', lang.code);
                               setShowLanguageDropdown(false);
-                              // Temporary debug log to verify language selection
-                              console.log("Language selected:", lang.code);
                             }}
                             className={`w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-slate-50 ${
                               selectedLanguage === lang.code ? 'bg-slate-100' : ''
@@ -773,6 +782,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ sessionId, contacts, resolve
                       </div>
                     </div>
                   )}
+                </div>
                 </div>
                 
                 {/* Voice Recording Button */}
