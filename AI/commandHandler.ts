@@ -1,5 +1,5 @@
 // Frontend command handler for blockchain actions
-import { parseGeminiResponse } from './aiClient.ts';
+import { parseGeminiResponse } from './aiClient';
 import type { AIModels, CommandResult, Contact } from "../types/types";
 
 /**
