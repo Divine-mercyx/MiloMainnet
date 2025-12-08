@@ -10,7 +10,7 @@ import { useSignTransaction, useSuiClient, useCurrentAccount } from '@mysten/dap
 import { buildTransaction, queryBalance } from './lib/suiTxBuilder';
 import toast from 'react-hot-toast';
 // Add AI processor import
-import { AIProcessor } from '../AI/processor';
+import { AIProcessor } from '../AI/processor.ts';
 // Remove useContacts import since we'll receive contacts as props
 // import { useContacts } from '../hooks/useContacts';
 
@@ -22,12 +22,9 @@ const INITIAL_GREETING: Message = {
   timestamp: new Date()
 };
 
-const API_KEY = import.meta.env.VITE_AI_API_KEY;
 
-// Add a check for the API key
-if (!API_KEY) {
-  console.warn("VITE_AI_API_KEY is not set. AI features will be disabled.");
-}
+let aiProcessor: AIProcessor | null = null;
+
 
 interface ChatAreaProps {
   sessionId?: string | null; // If null, it's a new chat. If string, load that chat.
@@ -49,29 +46,20 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ sessionId, contacts, resolve
   const { mutate: signTransaction } = useSignTransaction();
   const client = useSuiClient();
   const currentAccount = useCurrentAccount();
-  
-  // Initialize AI processor
-  const [aiProcessor, setAiProcessor] = useState<AIProcessor | null>(null);
-  
-    useEffect(() => {
-        const initAI = async () => {
-            // Only initialize if API key is available
-            if (API_KEY) {
-                try {
-                    const processor = new AIProcessor(API_KEY);
-                    await processor.initialize();
-                    setAiProcessor(processor);
-                    console.log("AI Processor initialized successfully!");
-                } catch (error) {
-                    console.error("Failed to initialize AI processor:", error);
-                }
-            } else {
-                console.warn("Skipping AI processor initialization - no API key available");
-            }
-        };
-        
-        initAI();
-    }, []);
+    
+  useEffect(() => {
+    const initAI = async () => {
+      try {
+        aiProcessor = new AIProcessor(); // No API key!
+        await aiProcessor.initialize();
+        console.log("AI Processor initialized successfully!");
+      } catch (error) {
+        console.error("Failed to initialize AI processor:", error);
+      }
+    };
+    
+    initAI();
+  }, []);
 
   // Load session when ID changes
   useEffect(() => {

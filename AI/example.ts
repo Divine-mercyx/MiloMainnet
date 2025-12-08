@@ -18,7 +18,7 @@ async function example() {
     const API_KEY = "AIzaSyCXMXpE5JRwUIQJXdIJAjNf0FrkQLnRres";
     
     // Create and initialize the AI processor
-    const aiProcessor = new AIProcessor(API_KEY);
+    const aiProcessor = new AIProcessor();
     
     try {
         await aiProcessor.initialize();

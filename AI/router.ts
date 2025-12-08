@@ -1,5 +1,5 @@
 // Frontend router for intent classification
-import { parseGeminiResponse } from './aiClient';
+import { parseGeminiResponse } from './aiClient.ts';
 import type { AIModels, AIParseResult } from "../types/types";
 
 /**

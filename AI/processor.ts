@@ -1,101 +1,81 @@
 // Main AI processor for frontend - combines all functionality
-import { initializeAI } from './aiClient';
-import { routeIntent } from './router';
-import { handleCommand } from './commandHandler';
-import { handleConversation } from './conversationHandler';
-import { transcribeAudio } from './transcribeHandler.ts';
-import type { AIModels, CommandResult, ConversationResult, TranscriptionResult, Contact } from "../types/types";
+import type { CommandResult, ConversationResult, TranscriptionResult, Contact } from "../types/types";
 
 /**
  * Main AI processor class for frontend use
  */
+// src/AI/index.ts
 export class AIProcessor {
-    private apiKey: string;
-    private models: AIModels | null;
-    private initialized: boolean;
+  private initialized: boolean;
 
-    /**
-     * Create an AI processor
-     * @param {string} apiKey - Google Generative AI API key
-     */
-    constructor(apiKey: string) {
-        this.apiKey = apiKey;
-        this.models = null;
-        this.initialized = false;
+  constructor() {
+    // No API key needed in frontend anymore!
+    this.initialized = false;
+  }
+
+  async initialize(): Promise<void> {
+    // Just mark as initialized - no models to load in frontend
+    this.initialized = true;
+    console.log("AI Processor initialized (using serverless backend)!");
+  }
+
+  async processInput(prompt: string, contacts: Contact[] = []): Promise<CommandResult | ConversationResult> {
+    if (!this.initialized) {
+      throw new Error("AI processor not initialized");
     }
 
-    /**
-     * Initialize AI models
-     * @returns {Promise<void>}
-     */
-    async initialize(): Promise<void> {
-        if (!this.apiKey) {
-            throw new Error("API key is required for initialization");
-        }
-        
-        try {
-            this.models = initializeAI(this.apiKey);
-            this.initialized = true;
-        } catch (error) {
-            console.error("Failed to initialize AI models:", error);
-            throw new Error("AI initialization failed");
-        }
+    try {
+      // Call YOUR serverless function instead of initializing models here
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          prompt,
+          contacts
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'API request failed');
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Error processing input:", error);
+      throw error;
+    }
+  }
+
+  async transcribe(audioBase64: string, mimeType: string, language: string = "en"): Promise<TranscriptionResult> {
+    if (!this.initialized) {
+      throw new Error("AI processor not initialized");
     }
 
-    /**
-     * Process user input through the full AI pipeline
-     * @param {string} prompt - User input to process
-     * @param {Contact[]} contacts - User's contact list (optional)
-     * @returns {Promise<CommandResult | ConversationResult>} Processing result
-     */
-    async processInput(prompt: string, contacts: Contact[] = []): Promise<CommandResult | ConversationResult> {
-        if (!this.initialized) {
-            throw new Error("AI processor not initialized. Call initialize() first.");
-        }
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          audioBase64,
+          mimeType,
+          language
+        })
+      });
 
-        if (!prompt || typeof prompt !== 'string') {
-            throw new Error("Invalid request: 'prompt' must be a string.");
-        }
+      if (!response.ok) {
+        throw new Error('Transcription failed');
+      }
 
-        try {
-            // Step 1: Classify intent
-            const { intent } = await routeIntent(this.models!, prompt);
-
-            // Step 2: Process based on intent
-            let response: CommandResult | ConversationResult;
-            switch (intent) {
-                case 'command':
-                    response = await handleCommand(this.models!, prompt, contacts);
-                    break;
-
-                case 'question':
-                case 'greeting':
-                    response = await handleConversation(this.models!, prompt, intent);
-                    break;
-
-                default:
-                    throw new Error(`Unknown intent: ${intent}`);
-            }
-
-            return response;
-        } catch (error) {
-            console.error("Error processing input:", error);
-            throw new Error("Failed to process input");
-        }
+      return await response.json();
+    } catch (error) {
+      console.error("Transcription error:", error);
+      throw error;
     }
-
-    /**
-     * Transcribe audio
-     * @param {string} audioBase64 - Base64 encoded audio data
-     * @param {string} mimeType - Audio MIME type
-     * @param {string} language - Language for transcription
-     * @returns {Promise<TranscriptionResult>} Transcription result
-     */
-    async transcribe(audioBase64: string, mimeType: string, language: string = "en"): Promise<TranscriptionResult> {
-        if (!this.initialized) {
-            throw new Error("AI processor not initialized. Call initialize() first.");
-        }
-
-        return await transcribeAudio(this.models!, audioBase64, mimeType, language);
-    }
+  }
 }
