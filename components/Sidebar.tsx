@@ -211,6 +211,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpe
                 active={currentView === 'beneficiaries'}
                 onClick={() => handleNavClick('beneficiaries')}
             />
+            
+            <div className="pt-4 pb-2">
+               <p className="px-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">DeFi</p>
+            </div>
+            <NavItem 
+                icon={<LayoutGrid size={18} />} 
+                label="DEX" 
+                description="Decentralized exchanges"
+                active={currentView === 'dex'}
+                onClick={() => handleNavClick('dex')}
+            />
           </nav>
         </div>
       </div>

@@ -7,6 +7,7 @@ import { GalleryPage } from './components/GalleryPage';
 import { SwapPage } from './components/SwapPage';
 import { BeneficiariesPage } from './components/BeneficiariesPage';
 import { ActivityPage } from './components/ActivityPage';
+import { DexPage } from './components/DexPage';
 import { Button } from './components/Button';
 import { LogOut, Menu, Globe, ChevronDown } from 'lucide-react';
 import { Tooltip } from './components/Tooltip';
@@ -18,7 +19,7 @@ import { useContacts } from './hooks/useContacts';
 
 const App: React.FC = () => {
   const [isConnected, setIsConnected] = useState(false);
-  const [currentView, setCurrentView] = useState('chat'); // 'chat' | 'mint' | 'gallery' | 'swap' | 'beneficiaries' | 'activity'
+  const [currentView, setCurrentView] = useState<'chat' | 'mint' | 'gallery' | 'swap' | 'beneficiaries' | 'activity' | 'dex'>('chat');
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [network, setNetwork] = useState<'mainnet' | 'testnet'>(() => {
@@ -93,6 +94,7 @@ const App: React.FC = () => {
                          currentView === 'mint' ? 'Minting Studio' : 
                          currentView === 'swap' ? 'Asset Swap' : 
                          currentView === 'beneficiaries' ? 'Contact Management' : 
+                         currentView === 'dex' ? 'DEX Platforms' : 
                          currentView === 'activity' ? 'History' : 'Digital Assets'}
                      </p>
                  </div>
@@ -155,6 +157,7 @@ const App: React.FC = () => {
          {currentView === 'swap' && <SwapPage />}
          {currentView === 'beneficiaries' && <BeneficiariesPage contacts={contacts} addContact={addContact} deleteContact={deleteContact} />}
          {currentView === 'activity' && <ActivityPage onSelectSession={handleSelectSession} />}
+         {currentView === 'dex' && <DexPage />}
       </div>
       <Toaster position="top-right" reverseOrder={false} /> {/* Add Toaster component */}
     </Layout>
