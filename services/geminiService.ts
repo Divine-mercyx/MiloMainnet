@@ -8,7 +8,7 @@ import {
 import { Message, Sender, MessageType } from "../types";
 
 // Initialize Gemini Client with a fallback
-const apiKey = process.env.API_KEY || import.meta.env.VITE_AI_API_KEY;
+const apiKey = import.meta.env.VITE_AI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY;
 const ai = new GoogleGenAI({ apiKey });
 
 const SYSTEM_INSTRUCTION = `
