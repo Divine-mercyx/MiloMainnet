@@ -1,13 +1,13 @@
 // Frontend-compatible AI client using Google Generative AI
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import type { AIModels, AIParseResult } from "../types/types";
+// import type { AIModels, AIParseResult } from "../types/types";
 
 /**
  * Initialize AI models with the provided API key
  * @param {string} apiKey - Google Generative AI API key
  * @returns {AIModels} Configured AI models
  */
-export function initializeAI(apiKey: string): AIModels {
+export function initializeAI(apiKey) {
     if (!apiKey) {
         throw new Error("API key is required to initialize AI models");
     }
@@ -28,7 +28,7 @@ export function initializeAI(apiKey: string): AIModels {
  * @param {string} text - Raw AI response text
  * @returns {AIParseResult} Parsed JSON object
  */
-export function parseGeminiResponse(text: string): AIParseResult {
+export function parseGeminiResponse(text) {
     try {
         const jsonString = text.replace(/```json|```/g, '').trim();
         return JSON.parse(jsonString);
