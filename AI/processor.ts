@@ -7,6 +7,7 @@ import type { CommandResult, ConversationResult, TranscriptionResult, Contact } 
 export class AIProcessor {
     private initialized: boolean;
     private apiUrl: string;
+    private transcribeUrl: string;
 
     /**
      * Create an AI processor
@@ -14,6 +15,7 @@ export class AIProcessor {
     constructor() {
         this.initialized = false;
         this.apiUrl = "https://milobrain-production.up.railway.app/api/v1/ai/response";
+        this.transcribeUrl = "https://milobrain-production.up.railway.app/api/v1/ai/transcribe";
     }
 
     /**
@@ -74,9 +76,34 @@ export class AIProcessor {
      * @returns {Promise<TranscriptionResult>} Transcription result
      */
     async transcribe(audioBase64: string, mimeType: string, language: string = "en"): Promise<TranscriptionResult> {
-        // Transcription not implemented in external service
-        return {
-            transcription: "Transcription is not implemented in this version."
-        } as TranscriptionResult;
+        if (!this.initialized) {
+            throw new Error("AI processor not initialized. Call initialize() first.");
+        }
+
+        try {
+            const response = await fetch(this.transcribeUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                    audio: audioBase64,
+                    mimeType: mimeType,
+                    language: language
+                })
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Transcription API request failed with status ${response.status}: ${errorText}`);
+            }
+
+            const data = await response.json();
+            
+            return data;
+        } catch (error) {
+            console.error("Error transcribing audio:", error);
+            throw new Error("Failed to transcribe audio");
+        }
     }
 }
