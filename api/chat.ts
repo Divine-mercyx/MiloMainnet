@@ -1,10 +1,10 @@
 // api/chat.ts
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { initializeAI } from '../AI/aiClient.ts';
-import { routeIntent } from '../AI/router.ts';
-import { handleCommand } from '../AI/commandHandler.ts';
-import { handleConversation } from '../AI/conversationHandler.ts';
-import { transcribeAudio } from '../AI/transcribeHandler.ts';
+import { initializeAI } from '../AI/aiClient';
+import { routeIntent } from '../AI/router';
+import { handleCommand } from '../AI/commandHandler';
+import { handleConversation } from '../AI/conversationHandler';
+import { transcribeAudio } from '../AI/transcribeHandler';
 import type { CommandResult, ConversationResult } from '../types/types';
 
 export default async function handler(
