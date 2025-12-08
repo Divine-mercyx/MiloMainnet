@@ -18,28 +18,10 @@ export type ChatHistoryItem = {
     timestamp: Date;
 };
 
-// AI Module Types
-export interface AIModels {
-    routerModel: any; // We'll refine this type later
-    commandModel: any;
-    transcribeModel: any;
-    conversationModel: any;
-}
-
-export interface AIParseResult {
-    intent?: string;
-    action?: string;
-    asset?: string;
-    amount?: string;
-    recipient?: string;
-    reply?: string;
-    message?: string;
-    transcription?: string;
-}
-
+// Simplified types for external AI service
 export type IntentType = 'command' | 'question' | 'greeting';
 
-export interface CommandResult extends AIParseResult {
+export interface CommandResult {
     action: string;
     reply?: string;
     message?: string;

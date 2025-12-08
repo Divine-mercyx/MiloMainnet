@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Mic, Paperclip, Image as ImageIcon, X, ExternalLink, Clock, CheckCircle, XCircle } from 'lucide-react';
 import { Message, Sender, MessageType, ChatSession } from '../types';
-import { sendMessageToGemini } from '../services/geminiService';
 import { ChatMessage } from './ChatMessage';
 import { Button } from './Button';
 import { Tooltip } from './Tooltip';
@@ -414,43 +413,10 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ sessionId, contacts, resolve
         }
       }
       
-      // Fallback to Gemini service if AI processor is not available or fails
-      const { text, draft } = await sendMessageToGemini(
-          newUserMessage.text, 
-          currentImage || undefined, 
-          messages
-      );
 
       const botMsgId = (Date.now() + 1).toString();
       
       const newBotMessages: Message[] = [];
-
-      if (text) {
-          newBotMessages.push({
-              id: botMsgId,
-              sender: Sender.Bot,
-              type: MessageType.Text,
-              text: text,
-              timestamp: new Date(),
-          });
-      }
-
-      if (draft) {
-          newBotMessages.push({
-              id: botMsgId + '_draft',
-              sender: Sender.Bot,
-              type: MessageType.Draft,
-              text: '',
-              draft: {
-                  name: draft.name,
-                  description: draft.description,
-                  network: draft.network || 'Sui',
-                  gas: draft.estimatedGas || '0.001 SUI',
-                  image: currentImage || undefined
-              },
-              timestamp: new Date(),
-          });
-      }
 
       setMessages(prev => [...prev, ...newBotMessages]);
 

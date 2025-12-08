@@ -26,9 +26,11 @@ import { Message, Sender, MessageType } from '../types';
 import { AIProcessor } from '../AI/index.ts';
 import { useConnectWallet, useWallets } from '@mysten/dapp-kit';
 
-
+const API_KEY = null; // Not needed anymore since we're using external service
 let aiProcessor: AIProcessor | null = null;
 
+// Add a check for the API key
+console.log("Using external AI service");
 
 interface LandingPageProps {
   onConnect: () => void;
