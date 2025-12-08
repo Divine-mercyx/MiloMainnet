@@ -146,8 +146,8 @@ export const DexPage: React.FC = () => {
       <div className="max-w-6xl mx-auto">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-slate-800">DEX Platforms</h1>
-            <p className="text-slate-500">Explore decentralized exchange opportunities</p>
+            <h1 className="text-2xl font-bold text-slate-800">Aggregated Markets</h1>
+            <p className="text-slate-500">Explore decentralized lending and borrowing opportunities</p>
           </div>
           <div className="flex items-center gap-3">
             <div className="text-sm text-slate-500">

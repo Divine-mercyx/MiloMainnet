@@ -217,8 +217,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpe
             </div>
             <NavItem 
                 icon={<LayoutGrid size={18} />} 
-                label="DEX" 
-                description="Decentralized exchanges"
+                label="Lending & Borrowing" 
+                description="Decentralized lending and borrowing"
                 active={currentView === 'dex'}
                 onClick={() => handleNavClick('dex')}
             />
