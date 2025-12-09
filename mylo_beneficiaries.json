@@ -1,1 +1,5 @@
-[{"id":"1","name":"divine","address":"0x123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}]
+[
+    {"id":"1","name":"divine","address":"0x123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"},
+    {"id": "2", "name":"funmi", "address": "0x2ca81e2262404d7525ce6fe573eb299184354bb7fd9a2edcbcbdb867ee304347"}
+
+]

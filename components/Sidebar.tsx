@@ -172,6 +172,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpe
               onClick={() => handleNavClick('swap')}
             />
             <NavItem 
+              icon={<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2v20"/>
+                <path d="m8 18 4 4 4-4"/>
+                <path d="m8 6 4-4 4 4"/>
+              </svg>} 
+              label="Convert to Naira" 
+              description="Swap crypto to NGN and send to bank"
+              active={currentView === 'fiat-swap'} 
+              onClick={() => handleNavClick('fiat-swap')}
+            />
+            <NavItem 
                 icon={<PlusSquare size={18} />} 
                 label="Mint NFT" 
                 description="Create new digital assets"

@@ -7,6 +7,7 @@ import { GalleryPage } from './components/GalleryPage';
 import { SwapPage } from './components/SwapPage';
 import { BeneficiariesPage } from './components/BeneficiariesPage';
 import { ActivityPage } from './components/ActivityPage';
+import { FiatSwapPage } from './components/FiatSwapPage';
 import { Button } from './components/Button';
 import { LogOut, Menu, Globe, ChevronDown } from 'lucide-react';
 import { Tooltip } from './components/Tooltip';
@@ -18,7 +19,7 @@ import { useContacts } from './hooks/useContacts';
 
 const App: React.FC = () => {
   const [isConnected, setIsConnected] = useState(false);
-  const [currentView, setCurrentView] = useState('chat'); // 'chat' | 'mint' | 'gallery' | 'swap' | 'beneficiaries' | 'activity'
+  const [currentView, setCurrentView] = useState('chat'); // 'chat' | 'mint' | 'gallery' | 'swap' | 'fiat-swap' | 'beneficiaries' | 'activity'
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [network, setNetwork] = useState<'mainnet' | 'testnet'>(() => {
@@ -37,6 +38,21 @@ const App: React.FC = () => {
   useEffect(() => {
     console.log("App contacts updated:", contacts);
   }, [contacts]);
+
+  // Listen for navigation events from ChatArea
+  useEffect(() => {
+    const handleNavigation = (event: CustomEvent) => {
+      const view = event.detail;
+      if (view) {
+        setCurrentView(view);
+      }
+    };
+
+    window.addEventListener('navigateTo', handleNavigation as EventListener);
+    return () => {
+      window.removeEventListener('navigateTo', handleNavigation as EventListener);
+    };
+  }, []);
 
   if (!currentAccount) {
     return <LandingPage onConnect={() => setIsConnected(true)} />;
@@ -92,6 +108,7 @@ const App: React.FC = () => {
                         {currentView === 'chat' ? (selectedChatId ? 'Chat History' : 'Conversational Interface') : 
                          currentView === 'mint' ? 'Minting Studio' : 
                          currentView === 'swap' ? 'Asset Swap' : 
+                         currentView === 'fiat-swap' ? 'Convert to Naira' : 
                          currentView === 'beneficiaries' ? 'Contact Management' : 
                          currentView === 'activity' ? 'History' : 'Digital Assets'}
                      </p>
@@ -153,6 +170,7 @@ const App: React.FC = () => {
          {currentView === 'mint' && <MintPage />}
          {currentView === 'gallery' && <GalleryPage />}
          {currentView === 'swap' && <SwapPage />}
+         {currentView === 'fiat-swap' && <FiatSwapPage />}
          {currentView === 'beneficiaries' && <BeneficiariesPage contacts={contacts} addContact={addContact} deleteContact={deleteContact} />}
          {currentView === 'activity' && <ActivityPage onSelectSession={handleSelectSession} />}
       </div>
