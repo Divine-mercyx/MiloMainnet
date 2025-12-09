@@ -1,45 +1,101 @@
+import { DataService } from '../services/dataService';
+
 /**
  * Service for handling fiat currency conversions
  */
 export class FiatService {
-  // Simulated exchange rates (in a real app, these would come from an API)
-  private exchangeRates = {
-    USDC_TO_NGN: 1500, // 1 USDC = 1500 NGN
-    SUI_TO_NGN: 1800,  // 1 SUI = 1800 NGN (derived from SUI->USDC->NGN)
+  // Cache for exchange rates to avoid repeated API calls
+  private cachedRates: {
+    usdcToNgn: number | null;
+    suiToNgn: number | null;
+    lastUpdated: number | null;
+  } = {
+    usdcToNgn: null,
+    suiToNgn: null,
+    lastUpdated: null
   };
 
+  // Cache expiration time (5 minutes)
+  private CACHE_EXPIRATION = 5 * 60 * 1000;
+
   /**
-   * Convert USDC to Nigerian Naira
+   * Get fresh or cached USD to NGN exchange rate
    */
-  convertUsdcToNgn(usdcAmount: number): number {
-    return usdcAmount * this.exchangeRates.USDC_TO_NGN;
+  private async getUsdToNgnRate(): Promise<number> {
+    const now = Date.now();
+    
+    // Check if cache is valid
+    if (this.cachedRates.usdcToNgn && 
+        this.cachedRates.lastUpdated && 
+        (now - this.cachedRates.lastUpdated) < this.CACHE_EXPIRATION) {
+      return this.cachedRates.usdcToNgn;
+    }
+
+    // Fetch fresh rate
+    try {
+      const rate = await DataService.getUsdToNgnRate();
+      this.cachedRates.usdcToNgn = rate;
+      this.cachedRates.lastUpdated = now;
+      return rate;
+    } catch (error) {
+      console.error('Error fetching USD to NGN rate:', error);
+      // Return cached rate if available, otherwise fallback
+      return this.cachedRates.usdcToNgn || 1500;
+    }
   }
 
   /**
-   * Convert SUI to Nigerian Naira (through USDC)
+   * Get fresh or cached SUI price in USD
    */
-  convertSuiToNgn(suiAmount: number): number {
-    return suiAmount * this.exchangeRates.SUI_TO_NGN;
+  private async getSuiPrice(): Promise<number> {
+    try {
+      return await DataService.getSuiPrice();
+    } catch (error) {
+      console.error('Error fetching SUI price:', error);
+      return 1.85; // Fallback price
+    }
   }
 
   /**
-   * Get the current NGN quote for a given amount of SUI
+   * Convert USDC to Nigerian Naira using real-time exchange rate
+   */
+  async convertUsdcToNgn(usdcAmount: number): Promise<number> {
+    const rate = await this.getUsdToNgnRate();
+    return usdcAmount * rate;
+  }
+
+  /**
+   * Convert SUI to Nigerian Naira using real-time exchange rates
+   */
+  async convertSuiToNgn(suiAmount: number): Promise<number> {
+    const suiPrice = await this.getSuiPrice();
+    const usdAmount = suiAmount * suiPrice;
+    const rate = await this.getUsdToNgnRate();
+    return usdAmount * rate;
+  }
+
+  /**
+   * Get the current NGN quote for a given amount of SUI with real-time rates
    */
   async getNgnQuote(suiAmount: number): Promise<{ 
     ngnAmount: number; 
     usdcAmount: number;
     exchangeRate: number;
+    suiToUsdRate: number;
   }> {
-    // First convert SUI to USDC
-    const usdcAmount = suiAmount * 1.2; // Simulated SUI to USDC rate
+    // Get real SUI price
+    const suiPrice = await this.getSuiPrice();
+    const usdcAmount = suiAmount * suiPrice;
     
-    // Then convert USDC to NGN
-    const ngnAmount = usdcAmount * this.exchangeRates.USDC_TO_NGN;
+    // Get real USD to NGN rate
+    const ngnRate = await this.getUsdToNgnRate();
+    const ngnAmount = usdcAmount * ngnRate;
     
     return {
       ngnAmount,
       usdcAmount,
-      exchangeRate: this.exchangeRates.USDC_TO_NGN
+      exchangeRate: ngnRate,
+      suiToUsdRate: suiPrice
     };
   }
 

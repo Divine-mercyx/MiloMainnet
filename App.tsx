@@ -15,6 +15,9 @@ import { useDisconnectWallet, useSuiClient } from '@mysten/dapp-kit';
 import { Toaster } from 'react-hot-toast';
 // Import the useContacts hook
 import { useContacts } from './hooks/useContacts';
+// Add missing imports
+import { FiatSwapPage } from './components/FiatSwapPage';
+import { DexPage } from './components/DexPage';
 
 const App: React.FC = () => {
   const [isConnected, setIsConnected] = useState(false);

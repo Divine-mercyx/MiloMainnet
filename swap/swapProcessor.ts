@@ -49,8 +49,8 @@ export class SwapProcessor {
       // Step 3: Calculate net USDC amount after fees
       const usdcAfterFees = usdcAmount - (fees.totalFee * 1.2); 
       
-      // Step 4: Convert USDC to NGN
-      const ngnNetAmount = this.fiatService.convertUsdcToNgn(usdcAfterFees);
+      // Step 4: Convert USDC to NGN using real-time exchange rate
+      const ngnNetAmount = await this.fiatService.convertUsdcToNgn(usdcAfterFees);
       
       // Return confirmation details for user approval
       return {
@@ -98,7 +98,7 @@ export class SwapProcessor {
       // Use the actual estimated output from Cetus
       const usdcAmount = swapResult.estimatedOutput;
       const usdcAfterFees = usdcAmount - (fees.totalFee * 1.2);
-      const ngnAmount = this.fiatService.convertUsdcToNgn(usdcAfterFees);
+      const ngnAmount = await this.fiatService.convertUsdcToNgn(usdcAfterFees);
       
       // Step 3: Execute bank payout
       const payoutResult = await this.payoutService.sendToBank(
@@ -136,7 +136,12 @@ export class SwapProcessor {
     usdcAmount: number;
     exchangeRate: number;
   }> {
-    return await this.fiatService.getNgnQuote(suiAmount);
+    const quote = await this.fiatService.getNgnQuote(suiAmount);
+    return {
+      ngnAmount: quote.ngnAmount,
+      usdcAmount: quote.usdcAmount,
+      exchangeRate: quote.exchangeRate
+    };
   }
 
   /**

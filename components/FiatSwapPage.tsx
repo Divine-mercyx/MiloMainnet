@@ -1,14 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from './Button';
-import { Info, CheckCircle, AlertCircle } from 'lucide-react';
+import { Info, CheckCircle, AlertCircle, Share2, Download } from 'lucide-react';
 import { Tooltip } from './Tooltip';
 import { SwapProcessor } from '../swap/swapProcessor';
 import { useSuiClient, useSignTransaction, useCurrentAccount } from '@mysten/dapp-kit';
+import { DataService } from '../services/dataService';
+import { OnChainTransactionService } from '../services/onChainTransactionService';
+import { TransactionHistory } from '../types/types';
+import toast from 'react-hot-toast';
 
 interface BankDetails {
   accountNumber: string;
   bankCode: string;
   accountName: string;
+}
+
+interface ReceiptData {
+  recipientName: string;
+  accountNumber: string;
+  bankName: string;
+  amount: number;
+  transactionDate: Date;
+  transactionId: string;
+  reference: string;
+  suiAmount: string;
 }
 
 export const FiatSwapPage: React.FC = () => {
@@ -22,10 +37,16 @@ export const FiatSwapPage: React.FC = () => {
     accountName: ''
   });
   const [step, setStep] = useState<'form' | 'confirmation' | 'processing' | 'success' | 'error'>('form');
-  const [quote, setQuote] = useState<{ ngnAmount: number; fees: number; netAmount: number } | null>(null);
+  const [quote, setQuote] = useState<{ ngnAmount: number; fees: number; netAmount: number; exchangeRate: number; suiPrice: number } | null>(null);
   const [transactionId, setTransactionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [banks, setBanks] = useState<Array<{ code: string; name: string }>>([]);
+  const [exchangeRate, setExchangeRate] = useState<number | null>(null);
+  const [suiPrice, setSuiPrice] = useState<number | null>(null);
+  
+  // Success modal
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
 
   // Initialize swap processor
   const swapProcessor = new SwapProcessor(suiClient);
@@ -57,6 +78,27 @@ export const FiatSwapPage: React.FC = () => {
     setBanks(supportedBanks);
   }, []);
 
+  // Fetch real-time exchange rates
+  useEffect(() => {
+    const fetchExchangeRates = async () => {
+      try {
+        const [usdToNgn, suiUsd] = await Promise.all([
+          DataService.getUsdToNgnRate(),
+          DataService.getSuiPrice()
+        ]);
+        setExchangeRate(usdToNgn);
+        setSuiPrice(suiUsd);
+      } catch (err) {
+        console.error('Error fetching exchange rates:', err);
+      }
+    };
+
+    fetchExchangeRates();
+    // Refresh rates every 5 minutes
+    const interval = setInterval(fetchExchangeRates, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   const handleGetQuote = async () => {
     if (!suiAmount || isNaN(parseFloat(suiAmount))) {
       setError('Please enter a valid amount');
@@ -81,13 +123,19 @@ export const FiatSwapPage: React.FC = () => {
       // Calculate net USDC amount after fees
       const usdcAfterFees = usdcAmount - (fees.totalFee * 1.2); // Approximate fee conversion
       
-      // Convert USDC to NGN
-      const ngnNetAmount = swapProcessor.getFiatService().convertUsdcToNgn(usdcAfterFees);
+      // Convert USDC to NGN using real-time exchange rate
+      const ngnNetAmount = await swapProcessor.getFiatService().convertUsdcToNgn(usdcAfterFees);
+      
+      // Get exchange rate for display
+      const usdToNgnRate = exchangeRate || 1500;
+      const currentSuiPrice = suiPrice || 1.85;
       
       const confirmationDetails = {
         ngnAmount: ngnNetAmount,
         fees: fees.totalFee,
-        netAmount: ngnNetAmount
+        netAmount: ngnNetAmount,
+        exchangeRate: usdToNgnRate,
+        suiPrice: currentSuiPrice
       };
       
       setQuote(confirmationDetails);
@@ -140,6 +188,68 @@ export const FiatSwapPage: React.FC = () => {
               if (payoutResult.success) {
                 setTransactionId(payoutResult.transactionId || '');
                 setStep('success');
+                
+                // Get bank name for receipt
+                const bank = banks.find(b => b.code === bankDetails.bankCode);
+                const bankName = bank ? bank.name : 'Unknown Bank';
+                
+                // Set receipt data
+                const receipt: ReceiptData = {
+                  recipientName: bankDetails.accountName,
+                  accountNumber: bankDetails.accountNumber,
+                  bankName,
+                  amount: quote?.netAmount || 0,
+                  transactionDate: new Date(),
+                  transactionId: payoutResult.transactionId || '',
+                  reference: `ref_${Math.random().toString(36).substr(2, 9)}`,
+                  suiAmount
+                };
+                
+                // Save transaction to history
+                const transaction: TransactionHistory = {
+                  id: receipt.transactionId,
+                  type: 'fiat_conversion',
+                  fromAsset: 'SUI',
+                  toAsset: 'NGN',
+                  fromAmount: parseFloat(suiAmount),
+                  toAmount: quote?.netAmount || 0,
+                  bankName,
+                  accountNumber: bankDetails.accountNumber,
+                  transactionId: payoutResult.transactionId || '',
+                  timestamp: new Date(),
+                  status: 'completed'
+                };
+                
+                // Save transaction on-chain if configured
+                const packageId = import.meta.env.VITE_TRANSACTION_HISTORY_PACKAGE_ID;
+                const registryId = import.meta.env.VITE_TRANSACTION_REGISTRY_ID;
+                
+                if (packageId && registryId && packageId !== '0x_your_package_id_here') {
+                  try {
+                    const onChainService = new OnChainTransactionService(suiClient, packageId, registryId);
+                    const recordTx = onChainService.createRecordTransactionTx(transaction);
+                    
+                    signTransaction(
+                      { transaction: recordTx },
+                      {
+                        onSuccess: () => {
+                          toast.success('Transaction recorded on blockchain!');
+                        },
+                        onError: (error: Error) => {
+                          console.error('Failed to record transaction on-chain:', error);
+                          toast.error('Swap successful, but failed to record on blockchain');
+                        }
+                      }
+                    );
+                  } catch (error) {
+                    console.error('Error creating on-chain transaction:', error);
+                  }
+                } else {
+                  console.warn('On-chain transaction history not configured');
+                }
+                
+                setReceiptData(receipt);
+                setShowSuccessModal(true);
               } else {
                 setError(payoutResult.errorMessage || 'Failed to process bank transfer');
                 setStep('error');
@@ -175,6 +285,139 @@ export const FiatSwapPage: React.FC = () => {
     setQuote(null);
     setTransactionId(null);
     setError(null);
+    setShowSuccessModal(false);
+    setReceiptData(null);
+  };
+
+  // Handle sharing the receipt
+  const handleShareReceipt = async () => {
+    if (!receiptData) return;
+    
+    const text = `Transaction Receipt\n` +
+      `Recipient: ${receiptData.recipientName}\n` +
+      `Amount: ₦${receiptData.amount.toFixed(2)}\n` +
+      `SUI Amount: ${receiptData.suiAmount} SUI\n` +
+      `Bank: ${receiptData.bankName}\n` +
+      `Date: ${receiptData.transactionDate.toLocaleString()}\n` +
+      `Transaction ID: ${receiptData.transactionId}`;
+    
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'MYLO Transaction Receipt',
+          text: text
+        });
+      } catch (err) {
+        console.log('Sharing failed', err);
+        // Fallback to copying to clipboard
+        navigator.clipboard.writeText(text);
+        alert('Receipt copied to clipboard!');
+      }
+    } else {
+      // Fallback for browsers that don't support Web Share API
+      navigator.clipboard.writeText(text);
+      alert('Receipt copied to clipboard!');
+    }
+  };
+
+  // Handle downloading the receipt
+  const handleDownloadReceipt = () => {
+    if (!receiptData) return;
+    
+    const receiptText = 
+      `MYLO TRANSACTION RECEIPT\n\n` +
+      `Recipient: ${receiptData.recipientName}\n` +
+      `Account Number: ${receiptData.accountNumber}\n` +
+      `Bank: ${receiptData.bankName}\n` +
+      `SUI Amount: ${receiptData.suiAmount} SUI\n` +
+      `NGN Amount: ₦${receiptData.amount.toFixed(2)}\n` +
+      `Transaction Date: ${receiptData.transactionDate.toLocaleString()}\n` +
+      `Transaction ID: ${receiptData.transactionId}\n` +
+      `Reference: ${receiptData.reference}\n\n` +
+      `Thank you for using MYLO!`;
+    
+    const blob = new Blob([receiptText], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `mylo-receipt-${receiptData.transactionId}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // Close modal
+  const handleCloseModal = () => {
+    setShowSuccessModal(false);
+    setReceiptData(null);
+    handleReset();
+  };
+
+  // Add a helper function to simulate account verification for testing
+  const simulateAccountVerification = (accountNumber: string, bankCode: string) => {
+    // In test mode, we can simulate verification for specific test account numbers
+    if (accountNumber === '0000000000') {
+      const bank = banks.find(b => b.code === bankCode);
+      return {
+        account_number: accountNumber,
+        account_name: `Test User - ${bank?.name || 'Unknown Bank'}`
+      };
+    }
+    return null;
+  };
+
+  // Verify account details
+  const [selectedBank, setSelectedBank] = useState<{ code: string; name: string } | null>(null);
+  const [accountNumber, setAccountNumber] = useState('');
+  const [verification, setVerification] = useState<{ account_number: string; account_name: string } | null>(null);
+  const [verificationError, setVerificationError] = useState<string | null>(null);
+  const [isVerifying, setIsVerifying] = useState(false);
+
+  const verifyAccount = async () => {
+    if (!bankDetails.accountNumber || !bankDetails.bankCode) return;
+    
+    setIsVerifying(true);
+    setVerificationError(null);
+    
+    try {
+      const response = await fetch(
+        `https://api.paystack.co/bank/resolve?account_number=${bankDetails.accountNumber}&bank_code=${bankDetails.bankCode}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${import.meta.env.PAYSTACK_SECRET_KEY || process.env.PAYSTACK_SECRET_KEY || 'sk_test_7aab64a468bed7aeac7b4d1ccafcd2e111b0fae8'}`
+          }
+        }
+      );
+      
+      const data = await response.json();
+      
+      if (response.ok && data.status) {
+        setVerification({
+          account_number: data.data.account_number,
+          account_name: data.data.account_name
+        });
+      } else {
+        // Handle the specific limit exceeded error
+        if (data.message && data.message.includes('daily limit')) {
+          setVerificationError('Test mode limit exceeded. For testing, use account number "0000000000" with any bank.');
+          
+          // For testing purposes, we can auto-verify with mock data
+          const mockVerification = simulateAccountVerification(bankDetails.accountNumber, bankDetails.bankCode);
+          if (mockVerification) {
+            setVerification(mockVerification);
+            setVerificationError(null);
+          }
+        } else {
+          setVerificationError(data.message || 'Unable to verify account');
+        }
+      }
+    } catch (error) {
+      setVerificationError('Network error. Please try again.');
+      console.error('Error verifying account:', error);
+    } finally {
+      setIsVerifying(false);
+    }
   };
 
   return (
@@ -207,6 +450,17 @@ export const FiatSwapPage: React.FC = () => {
                 <div className="mt-2 text-xs text-slate-400">
                   Enter the amount of SUI you want to convert to Nigerian Naira
                 </div>
+                
+                {/* Exchange Rate Display */}
+                {(exchangeRate !== null && suiPrice !== null) && (
+                  <div className="mt-3 p-3 bg-blue-50 rounded-lg">
+                    <div className="text-xs text-blue-800">
+                      <div>Current Rates:</div>
+                      <div>1 SUI = ${suiPrice.toFixed(4)} USD</div>
+                      <div>1 USD = ₦{exchangeRate.toFixed(2)} NGN</div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="border-t border-slate-100 pt-6 mt-6">
@@ -297,19 +551,24 @@ export const FiatSwapPage: React.FC = () => {
                 </div>
                 
                 <div className="flex justify-between items-center mb-4">
+                  <div className="text-slate-500">SUI Price</div>
+                  <div className="font-bold text-slate-800">${quote.suiPrice.toFixed(4)} USD</div>
+                </div>
+                
+                <div className="flex justify-between items-center mb-4">
                   <div className="text-slate-500">Exchange rate</div>
-                  <div className="font-bold text-slate-800">1 SUI ≈ ₦{quote.ngnAmount / parseFloat(suiAmount)}</div>
+                  <div className="font-bold text-slate-800">1 USD = ₦{quote.exchangeRate.toFixed(2)}</div>
                 </div>
                 
                 <div className="flex justify-between items-center mb-4">
                   <div className="text-slate-500">Fees</div>
-                  <div className="font-bold text-slate-800">₦{quote.fees.toLocaleString()}</div>
+                  <div className="font-bold text-slate-800">₦{quote.fees.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                 </div>
                 
                 <div className="border-t border-slate-200 pt-4 mt-4">
                   <div className="flex justify-between items-center">
                     <div className="text-slate-700 font-semibold">You'll receive</div>
-                    <div className="text-2xl font-bold text-teal-600">₦{quote.netAmount.toLocaleString()}</div>
+                    <div className="text-2xl font-bold text-teal-600">₦{quote.netAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                   </div>
                 </div>
               </div>
@@ -376,7 +635,7 @@ export const FiatSwapPage: React.FC = () => {
               </div>
               <h2 className="text-xl font-bold text-slate-800 mb-2">Conversion Successful!</h2>
               <p className="text-slate-500 mb-6">
-                ₦{quote?.netAmount.toLocaleString()} has been sent to your bank account.
+                ₦{quote?.netAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} has been sent to your bank account.
               </p>
               
               <div className="bg-slate-50 rounded-xl p-4 mb-6 text-left">
@@ -428,6 +687,75 @@ export const FiatSwapPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Success Modal */}
+      {showSuccessModal && receiptData && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-md w-full overflow-hidden">
+            <div className="p-6">
+              <div className="text-center">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <CheckCircle className="text-green-500" size={32} />
+                </div>
+                <h2 className="text-2xl font-bold text-slate-800 mb-2">Transaction Successful!</h2>
+                <p className="text-slate-500 mb-6">
+                  Your SUI has been successfully converted to Nigerian Naira.
+                </p>
+                
+                <div className="bg-slate-50 rounded-xl p-4 text-left mb-6">
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="text-slate-500">Recipient</div>
+                    <div className="font-medium text-slate-800 truncate">{receiptData.recipientName}</div>
+                    
+                    <div className="text-slate-500">SUI Amount</div>
+                    <div className="font-medium text-slate-800">{receiptData.suiAmount} SUI</div>
+                    
+                    <div className="text-slate-500">NGN Amount</div>
+                    <div className="font-medium text-slate-800">₦{receiptData.amount.toFixed(2)}</div>
+                    
+                    <div className="text-slate-500">Bank</div>
+                    <div className="font-medium text-slate-800">{receiptData.bankName}</div>
+                    
+                    <div className="text-slate-500">Date</div>
+                    <div className="font-medium text-slate-800">{receiptData.transactionDate.toLocaleDateString()}</div>
+                    
+                    <div className="text-slate-500">Transaction ID</div>
+                    <div className="font-medium text-slate-800 text-xs truncate">{receiptData.transactionId}</div>
+                  </div>
+                </div>
+                
+                <div className="flex gap-3">
+                  <Button 
+                    variant="outline" 
+                    className="flex-1 flex items-center justify-center gap-2"
+                    onClick={handleShareReceipt}
+                  >
+                    <Share2 size={16} />
+                    Share
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    className="flex-1 flex items-center justify-center gap-2"
+                    onClick={handleDownloadReceipt}
+                  >
+                    <Download size={16} />
+                    Download
+                  </Button>
+                </div>
+              </div>
+            </div>
+            
+            <div className="border-t border-slate-100 p-4 bg-slate-50">
+              <Button 
+                className="w-full"
+                onClick={handleCloseModal}
+              >
+                Done
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

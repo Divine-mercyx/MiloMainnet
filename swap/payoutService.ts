@@ -6,9 +6,9 @@ export class PayoutService {
   
   constructor() {
     // Initialize Paystack with secret key from environment variables
-    // In a real implementation, you would set PAYSTACK_SECRET_KEY in your environment
     const Paystack = require('paystack');
-    this.paystack = new Paystack(process.env.PAYSTACK_SECRET_KEY || 'sk_test_your_secret_key_here');
+    // Use the PAYSTACK_SECRET_KEY from environment variables
+    this.paystack = new Paystack(import.meta.env.PAYSTACK_SECRET_KEY || process.env.PAYSTACK_SECRET_KEY || 'sk_test_your_secret_key_here');
   }
   
   /**
@@ -19,6 +19,15 @@ export class PayoutService {
     transactionId?: string;
     reference?: string;
     errorMessage?: string;
+    receiptData?: {
+      recipientName: string;
+      accountNumber: string;
+      bankName: string;
+      amount: number;
+      transactionDate: Date;
+      transactionId: string;
+      reference: string;
+    };
   }> {
     try {
       // Validate inputs
@@ -31,6 +40,11 @@ export class PayoutService {
       
       // Create a unique reference for this transfer
       const reference = `transfer_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Get bank name for receipt
+      const banks = this.getSupportedBanks();
+      const bank = banks.find(b => b.code === bankCode);
+      const bankName = bank ? bank.name : 'Unknown Bank';
       
       // Prepare transfer data
       const transferData = {
@@ -81,10 +95,22 @@ export class PayoutService {
         };
       }
       
+      // Prepare receipt data
+      const receiptData = {
+        recipientName,
+        accountNumber,
+        bankName,
+        amount,
+        transactionDate: new Date(),
+        transactionId: transferResponse.data.transfer_code,
+        reference
+      };
+      
       return {
         success: true,
         transactionId: transferResponse.data.transfer_code,
-        reference: reference
+        reference: reference,
+        receiptData
       };
     } catch (error: any) {
       console.error('Paystack transfer error:', error);

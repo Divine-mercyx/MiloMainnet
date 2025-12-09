@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from './Button';
-import { ArrowDownUp, Settings, ChevronDown, Info, Loader, CheckCircle, AlertCircle } from 'lucide-react';
+import { ArrowDownUp, Settings, ChevronDown, Info, Loader, CheckCircle, AlertCircle, Share2, Download } from 'lucide-react';
 import { Tooltip } from './Tooltip';
-import { useCurrentAccount, useSuiClient } from '@mysten/dapp-kit';
+import { useCurrentAccount, useSuiClient, useSignTransaction } from '@mysten/dapp-kit';
+import { DataService } from '../services/dataService';
+import { OnChainTransactionService } from '../services/onChainTransactionService';
+import { TransactionHistory } from '../types/types';
+import toast from 'react-hot-toast';
 
 interface Bank {
   id: number;
@@ -16,11 +20,34 @@ interface AccountVerification {
   account_name: string;
 }
 
+interface ReceiptData {
+  recipientName: string;
+  accountNumber: string;
+  bankName: string;
+  amount: number;
+  transactionDate: Date;
+  transactionId: string;
+  reference: string;
+}
+
 export const SwapPage: React.FC = () => {
   const [suiAmount, setSuiAmount] = useState('');
   const [nairaAmount, setNairaAmount] = useState('');
   const [isSwapping, setIsSwapping] = useState(false);
   const [suiBalance, setSuiBalance] = useState<number | null>(null);
+  
+  // Exchange rates
+  const [exchangeRates, setExchangeRates] = useState<{
+    suiToUsd: number | null;
+    usdToNgn: number | null;
+  }>({
+    suiToUsd: null,
+    usdToNgn: null
+  });
+  
+  // Success modal
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
   
   // Naira swap states
   const [banks, setBanks] = useState<Bank[]>([]);
@@ -32,6 +59,7 @@ export const SwapPage: React.FC = () => {
   
   const currentAccount = useCurrentAccount();
   const suiClient = useSuiClient();
+  const { mutate: signTransaction } = useSignTransaction();
 
   // Fetch user's SUI balance
   useEffect(() => {
@@ -54,13 +82,37 @@ export const SwapPage: React.FC = () => {
     fetchBalance();
   }, [currentAccount, suiClient]);
 
+  // Fetch exchange rates
+  useEffect(() => {
+    const fetchExchangeRates = async () => {
+      try {
+        const [suiPrice, usdToNgnRate] = await Promise.all([
+          DataService.getSuiPrice(),
+          DataService.getUsdToNgnRate()
+        ]);
+        
+        setExchangeRates({
+          suiToUsd: suiPrice,
+          usdToNgn: usdToNgnRate
+        });
+      } catch (err) {
+        console.error("Error fetching exchange rates:", err);
+      }
+    };
+
+    fetchExchangeRates();
+    // Refresh rates every 5 minutes
+    const interval = setInterval(fetchExchangeRates, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Fetch Nigerian banks from Paystack
   useEffect(() => {
     const fetchBanks = async () => {
       try {
         const response = await fetch('https://api.paystack.co/bank?country=nigeria', {
           headers: {
-            'Authorization': 'Bearer sk_test_7aab64a468bed7aeac7b4d1ccafcd2e111b0fae8'
+            'Authorization': `Bearer ${import.meta.env.PAYSTACK_SECRET_KEY || process.env.PAYSTACK_SECRET_KEY }`
           }
         });
         
@@ -82,10 +134,12 @@ export const SwapPage: React.FC = () => {
     if (/^\d*\.?\d*$/.test(value)) {
       setSuiAmount(value);
       
-      // Simple conversion rate for demo (1 SUI = 1000 NGN)
-      if (value) {
-        const nairaValue = (parseFloat(value) * 1000).toFixed(2);
-        setNairaAmount(nairaValue);
+      // Calculate Naira amount using real-time exchange rates
+      if (value && exchangeRates.suiToUsd && exchangeRates.usdToNgn) {
+        const suiValue = parseFloat(value);
+        const usdValue = suiValue * exchangeRates.suiToUsd;
+        const nairaValue = usdValue * exchangeRates.usdToNgn;
+        setNairaAmount(nairaValue.toFixed(2));
       } else {
         setNairaAmount('');
       }
@@ -117,7 +171,7 @@ export const SwapPage: React.FC = () => {
         `https://api.paystack.co/bank/resolve?account_number=${accountNumber}&bank_code=${selectedBank.code}`,
         {
           headers: {
-            'Authorization': 'Bearer sk_test_7aab64a468bed7aeac7b4d1ccafcd2e111b0fae8'
+            'Authorization': `Bearer ${import.meta.env.PAYSTACK_SECRET_KEY || process.env.PAYSTACK_SECRET_KEY || 'sk_test_7aab64a468bed7aeac7b4d1ccafcd2e111b0fae8'}`
           }
         }
       );
@@ -130,7 +184,21 @@ export const SwapPage: React.FC = () => {
           account_name: data.data.account_name
         });
       } else {
-        setVerificationError(data.message || 'Unable to verify account');
+        // Handle the specific limit exceeded error
+        if (data.message && data.message.includes('daily limit')) {
+          setVerificationError('Test mode limit exceeded. For testing, use account number "0000000000" with any bank.');
+          
+          // For testing purposes, we can auto-verify with mock data
+          if (accountNumber === '0000000000') {
+            setVerification({
+              account_number: accountNumber,
+              account_name: 'Test User'
+            });
+            setVerificationError(null);
+          }
+        } else {
+          setVerificationError(data.message || 'Unable to verify account');
+        }
       }
     } catch (error) {
       setVerificationError('Network error. Please try again.');
@@ -140,7 +208,7 @@ export const SwapPage: React.FC = () => {
     }
   };
 
-  const handleSwap = () => {
+  const handleSwap = async () => {
     const amount = parseFloat(suiAmount);
     
     // Check if user has sufficient balance
@@ -154,16 +222,150 @@ export const SwapPage: React.FC = () => {
       return;
     }
     
+    if (!currentAccount) {
+      alert('Please connect your wallet');
+      return;
+    }
+    
+    // Check if on-chain transaction history is configured
+    const packageId = import.meta.env.VITE_TRANSACTION_HISTORY_PACKAGE_ID;
+    const registryId = import.meta.env.VITE_TRANSACTION_REGISTRY_ID;
+    
     // Perform the swap
     setIsSwapping(true);
     
     // For demo purposes, we'll simulate the swap process
-    setTimeout(() => {
+    setTimeout(async () => {
+      // Create mock receipt data
+      const mockReceiptData: ReceiptData = {
+        recipientName: verification.account_name,
+        accountNumber: verification.account_number,
+        bankName: selectedBank?.name || 'Unknown Bank',
+        amount: parseFloat(nairaAmount),
+        transactionDate: new Date(),
+        transactionId: `txn_${Date.now()}`,
+        reference: `ref_${Math.random().toString(36).substr(2, 9)}`
+      };
+      
+      // Prepare transaction data
+      const transaction: TransactionHistory = {
+        id: mockReceiptData.transactionId,
+        type: 'fiat_conversion',
+        fromAsset: 'SUI',
+        toAsset: 'NGN',
+        fromAmount: amount,
+        toAmount: parseFloat(nairaAmount),
+        bankName: selectedBank?.name,
+        accountNumber: verification.account_number,
+        transactionId: mockReceiptData.transactionId,
+        timestamp: new Date(),
+        status: 'completed'
+      };
+      
+      // Save transaction on-chain if configured
+      if (packageId && registryId && packageId !== '0x_your_package_id_here') {
+        try {
+          const onChainService = new OnChainTransactionService(suiClient, packageId, registryId);
+          const recordTx = onChainService.createRecordTransactionTx(transaction);
+          
+          signTransaction(
+            { transaction: recordTx },
+            {
+              onSuccess: () => {
+                toast.success('Transaction recorded on blockchain!');
+              },
+              onError: (error: Error) => {
+                console.error('Failed to record transaction on-chain:', error);
+                toast.error('Swap successful, but failed to record on blockchain');
+              }
+            }
+          );
+        } catch (error) {
+          console.error('Error creating on-chain transaction:', error);
+          toast.error('Swap successful, but failed to record on blockchain');
+        }
+      } else {
+        console.warn('On-chain transaction history not configured. Please deploy the transaction_history module and update .env');
+      }
+      
+      setReceiptData(mockReceiptData);
+      setShowSuccessModal(true);
       setIsSwapping(false);
+      
+      // Clear form fields
       setSuiAmount('');
       setNairaAmount('');
-      alert(`Successfully swapped ${suiAmount} SUI to Nigerian Naira and sent to ${verification.account_name}'s account`);
     }, 2000);
+  };
+
+  // Calculate the current exchange rate for display
+  const getCurrentExchangeRate = () => {
+    if (exchangeRates.suiToUsd && exchangeRates.usdToNgn) {
+      return exchangeRates.suiToUsd * exchangeRates.usdToNgn;
+    }
+    return 1500; // Fallback to previous hardcoded rate
+  };
+
+  // Handle sharing the receipt
+  const handleShareReceipt = async () => {
+    if (!receiptData) return;
+    
+    const text = `Transaction Receipt\n` +
+      `Recipient: ${receiptData.recipientName}\n` +
+      `Amount: ₦${receiptData.amount.toFixed(2)}\n` +
+      `Bank: ${receiptData.bankName}\n` +
+      `Date: ${receiptData.transactionDate.toLocaleString()}\n` +
+      `Transaction ID: ${receiptData.transactionId}`;
+    
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'MYLO Transaction Receipt',
+          text: text
+        });
+      } catch (err) {
+        console.log('Sharing failed', err);
+        // Fallback to copying to clipboard
+        navigator.clipboard.writeText(text);
+        alert('Receipt copied to clipboard!');
+      }
+    } else {
+      // Fallback for browsers that don't support Web Share API
+      navigator.clipboard.writeText(text);
+      alert('Receipt copied to clipboard!');
+    }
+  };
+
+  // Handle downloading the receipt
+  const handleDownloadReceipt = () => {
+    if (!receiptData) return;
+    
+    const receiptText = 
+      `MYLO TRANSACTION RECEIPT\n\n` +
+      `Recipient: ${receiptData.recipientName}\n` +
+      `Account Number: ${receiptData.accountNumber}\n` +
+      `Bank: ${receiptData.bankName}\n` +
+      `Amount: ₦${receiptData.amount.toFixed(2)}\n` +
+      `Transaction Date: ${receiptData.transactionDate.toLocaleString()}\n` +
+      `Transaction ID: ${receiptData.transactionId}\n` +
+      `Reference: ${receiptData.reference}\n\n` +
+      `Thank you for using MYLO!`;
+    
+    const blob = new Blob([receiptText], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `mylo-receipt-${receiptData.transactionId}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // Close modal and reset form
+  const handleCloseModal = () => {
+    setShowSuccessModal(false);
+    setReceiptData(null);
   };
 
   return (
@@ -201,7 +403,7 @@ export const SwapPage: React.FC = () => {
               </div>
             </div>
             <div className="mt-2 text-xs text-slate-400">
-              ~${suiAmount ? (parseFloat(suiAmount) * 1.85).toFixed(2) : '0.00'}
+              ~${suiAmount ? (parseFloat(suiAmount) * (exchangeRates.suiToUsd || 1.85)).toFixed(2) : '0.00'}
             </div>
           </div>
 
@@ -322,7 +524,7 @@ export const SwapPage: React.FC = () => {
           <div className="px-6 py-4 border-t border-slate-100 bg-white">
             <div className="flex justify-between text-xs text-slate-500 mb-2">
               <span className="flex items-center gap-1">Rate <Info size={10} /></span>
-              <span className="font-medium">1 SUI ≈ ₦1,000</span>
+              <span className="font-medium">1 SUI ≈ ₦{getCurrentExchangeRate().toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
             </div>
             <div className="flex justify-between text-xs text-slate-500">
               <span className="flex items-center gap-1">Network Fee <Info size={10} /></span>
@@ -347,6 +549,72 @@ export const SwapPage: React.FC = () => {
           Powered by Sui DEX Aggregators. <br/>Minimal slippage, maximum efficiency.
         </p>
       </div>
+
+      {/* Success Modal */}
+      {showSuccessModal && receiptData && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-md w-full overflow-hidden">
+            <div className="p-6">
+              <div className="text-center">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <CheckCircle className="text-green-500" size={32} />
+                </div>
+                <h2 className="text-2xl font-bold text-slate-800 mb-2">Transaction Successful!</h2>
+                <p className="text-slate-500 mb-6">
+                  Your SUI has been successfully converted to Nigerian Naira.
+                </p>
+                
+                <div className="bg-slate-50 rounded-xl p-4 text-left mb-6">
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="text-slate-500">Recipient</div>
+                    <div className="font-medium text-slate-800 truncate">{receiptData.recipientName}</div>
+                    
+                    <div className="text-slate-500">Amount</div>
+                    <div className="font-medium text-slate-800">₦{receiptData.amount.toFixed(2)}</div>
+                    
+                    <div className="text-slate-500">Bank</div>
+                    <div className="font-medium text-slate-800">{receiptData.bankName}</div>
+                    
+                    <div className="text-slate-500">Date</div>
+                    <div className="font-medium text-slate-800">{receiptData.transactionDate.toLocaleDateString()}</div>
+                    
+                    <div className="text-slate-500">Transaction ID</div>
+                    <div className="font-medium text-slate-800 text-xs truncate">{receiptData.transactionId}</div>
+                  </div>
+                </div>
+                
+                <div className="flex gap-3">
+                  <Button 
+                    variant="outline" 
+                    className="flex-1 flex items-center justify-center gap-2"
+                    onClick={handleShareReceipt}
+                  >
+                    <Share2 size={16} />
+                    Share
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    className="flex-1 flex items-center justify-center gap-2"
+                    onClick={handleDownloadReceipt}
+                  >
+                    <Download size={16} />
+                    Download
+                  </Button>
+                </div>
+              </div>
+            </div>
+            
+            <div className="border-t border-slate-100 p-4 bg-slate-50">
+              <Button 
+                className="w-full"
+                onClick={handleCloseModal}
+              >
+                Done
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

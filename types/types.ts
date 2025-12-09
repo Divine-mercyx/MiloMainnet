@@ -72,3 +72,31 @@ export interface WalletState {
 
 export type SortField = 'asset' | 'platform' | 'apy' | 'tvl';
 export type SortOrder = 'asc' | 'desc';
+
+// Transaction History Types
+export type TransactionType = 'swap' | 'send' | 'receive' | 'mint' | 'fiat_conversion';
+
+export interface TransactionHistory {
+  id: string;
+  type: TransactionType;
+  fromAsset?: string;
+  toAsset?: string;
+  fromAmount?: number;
+  toAmount?: number;
+  recipient?: string;
+  sender?: string;
+  bankName?: string;
+  accountNumber?: string;
+  transactionId?: string;
+  timestamp: Date;
+  status: 'pending' | 'completed' | 'failed';
+  gasUsed?: number;
+}
+
+// Exchange Rate Data Types
+export interface ExchangeRatePoint {
+  timestamp: number;
+  rate: number;
+  suiPrice: number;
+  ngnRate: number;
+}
