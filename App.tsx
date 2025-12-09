@@ -32,7 +32,7 @@ const App: React.FC = () => {
   const disconnectWalletMutation = useDisconnectWallet();
   
   // Use the contacts hook at the App level
-  const { contacts, addContact, deleteContact, resolveContact } = useContacts();
+  const { contacts, addContact, deleteContact, resolveContact, loading, error, refetch } = useContacts();
   
   // Add debugging to see what contacts are loaded
   useEffect(() => {
@@ -155,7 +155,14 @@ const App: React.FC = () => {
          {currentView === 'mint' && <MintPage />}
          {currentView === 'gallery' && <GalleryPage />}
          {currentView === 'swap' && <SwapPage />}
-         {currentView === 'beneficiaries' && <BeneficiariesPage contacts={contacts} addContact={addContact} deleteContact={deleteContact} />}
+         {currentView === 'beneficiaries' && <BeneficiariesPage 
+           contacts={contacts} 
+           addContact={addContact} 
+           deleteContact={deleteContact} 
+           loading={loading}
+           error={error}
+           refetch={refetch}
+         />}
          {currentView === 'activity' && <ActivityPage onSelectSession={handleSelectSession} />}
          {currentView === 'dex' && <DexPage />}
       </div>
