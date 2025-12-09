@@ -18,28 +18,10 @@ export type ChatHistoryItem = {
     timestamp: Date;
 };
 
-// AI Module Types
-export interface AIModels {
-    routerModel: any; // We'll refine this type later
-    commandModel: any;
-    transcribeModel: any;
-    conversationModel: any;
-}
-
-export interface AIParseResult {
-    intent?: string;
-    action?: string;
-    asset?: string;
-    amount?: string;
-    recipient?: string;
-    reply?: string;
-    message?: string;
-    transcription?: string;
-}
-
+// Simplified types for external AI service
 export type IntentType = 'command' | 'question' | 'greeting';
 
-export interface CommandResult extends AIParseResult {
+export interface CommandResult {
     action: string;
     reply?: string;
     message?: string;
@@ -54,3 +36,39 @@ export interface ConversationResult {
 export interface TranscriptionResult {
     transcription: string;
 }
+
+// Updated types for lending opportunities
+export type Platform = 'Suilend' | 'Scallop' | 'Navi';
+
+export interface LendingOpportunity {
+  id: string;
+  asset: string;
+  symbol: string;
+  platform: Platform;
+  apy: number;
+  tvl: number;
+  trend: 'up' | 'down' | 'stable';
+}
+
+export interface PortfolioStats {
+  totalValue: number;
+  dailyEarnings: number;
+  netApy: number;
+}
+
+export interface ActivePosition {
+  id: string;
+  asset: string;
+  platform: Platform;
+  amount: number;
+  earnings: number;
+}
+
+export interface WalletState {
+  isConnected: boolean;
+  address: string | null;
+  balance: number;
+}
+
+export type SortField = 'asset' | 'platform' | 'apy' | 'tvl';
+export type SortOrder = 'asc' | 'desc';

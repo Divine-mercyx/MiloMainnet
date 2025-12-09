@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Mic, Paperclip, Image as ImageIcon, X, ExternalLink, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { Send, Mic, Paperclip, Image as ImageIcon, X, ExternalLink, Clock, CheckCircle, XCircle, Globe, Square } from 'lucide-react';
 import { Message, Sender, MessageType, ChatSession } from '../types';
-import { sendMessageToGemini } from '../services/geminiService';
 import { ChatMessage } from './ChatMessage';
 import { Button } from './Button';
 import { Tooltip } from './Tooltip';
@@ -10,7 +9,7 @@ import { useSignTransaction, useSuiClient, useCurrentAccount } from '@mysten/dap
 import { buildTransaction, queryBalance } from './lib/suiTxBuilder';
 import toast from 'react-hot-toast';
 // Add AI processor import
-import { AIProcessor } from '../AI/processor';
+import { AIProcessor } from '../AI';
 // Remove useContacts import since we'll receive contacts as props
 // import { useContacts } from '../hooks/useContacts';
 
@@ -22,12 +21,9 @@ const INITIAL_GREETING: Message = {
   timestamp: new Date()
 };
 
-const API_KEY = import.meta.env.VITE_AI_API_KEY;
 
-// Add a check for the API key
-if (!API_KEY) {
-  console.warn("VITE_AI_API_KEY is not set. AI features will be disabled.");
-}
+let aiProcessor: AIProcessor | null = null;
+
 
 interface ChatAreaProps {
   sessionId?: string | null; // If null, it's a new chat. If string, load that chat.
@@ -41,37 +37,61 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ sessionId, contacts, resolve
   const [isLoading, setIsLoading] = useState(false);
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(sessionId || null);
+  const [selectedLanguage, setSelectedLanguage] = useState<string>(() => {
+    // Load saved language from localStorage or default to 'en-US'
+    return localStorage.getItem('mylo_selected_language') || 'en-US';
+  });
+  const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const languageButtonRef = useRef<HTMLButtonElement>(null);
+  const micButtonRef = useRef<HTMLButtonElement>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const synthRef = useRef<SpeechSynthesis | null>(null);
 
   // Add Sui hooks
   const { mutate: signTransaction } = useSignTransaction();
   const client = useSuiClient();
   const currentAccount = useCurrentAccount();
-  
-  // Initialize AI processor
-  const [aiProcessor, setAiProcessor] = useState<AIProcessor | null>(null);
-  
-    useEffect(() => {
-        const initAI = async () => {
-            // Only initialize if API key is available
-            if (API_KEY) {
-                try {
-                    const processor = new AIProcessor(API_KEY);
-                    await processor.initialize();
-                    setAiProcessor(processor);
-                    console.log("AI Processor initialized successfully!");
-                } catch (error) {
-                    console.error("Failed to initialize AI processor:", error);
-                }
-            } else {
-                console.warn("Skipping AI processor initialization - no API key available");
-            }
-        };
-        
-        initAI();
-    }, []);
+    
+  useEffect(() => {
+    const initAI = async () => {
+      try {
+        aiProcessor = new AIProcessor(); // No API key!
+        await aiProcessor.initialize();
+        console.log("AI Processor initialized successfully!");
+      } catch (error) {
+        console.error("Failed to initialize AI processor:", error);
+      }
+    };
+    
+    initAI();
+    
+    // Initialize speech synthesis
+    if ('speechSynthesis' in window) {
+      synthRef.current = window.speechSynthesis;
+    }
+  }, []);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      // Only close if clicking outside the language selector area
+      const languageArea = document.querySelector('.language-selector-area');
+      if (languageArea && !languageArea.contains(event.target as Node)) {
+        setShowLanguageDropdown(false);
+      }
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, []);
 
   // Load session when ID changes
   useEffect(() => {
@@ -332,6 +352,154 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ sessionId, contacts, resolve
     }
   };
 
+  // Get language API code
+  const getLanguageApiCode = (langCode: string): string => {
+    // Map full language codes to API codes
+    const langMap: Record<string, string> = {
+      'en-US': 'en',
+      'es-ES': 'es',
+      'fr-FR': 'fr',
+      'de-DE': 'de',
+      'it-IT': 'it',
+      'pt-BR': 'pt',
+      'ja-JP': 'ja',
+      'ko-KR': 'ko',
+      'zh-CN': 'zh',
+      'ig-NG': 'ig',
+      'yo-NG': 'yo',
+      'ha-NG': 'ha'
+    };
+    
+    return langMap[langCode] || 'en';
+  };
+
+  // Transcribe audio using AI processor
+  const transcribeAudio = async (audioBlob: Blob) => {
+    if (!aiProcessor) {
+      toast.error("AI processor not initialized");
+      return;
+    }
+
+    try {
+      setIsTranscribing(true);
+      // Show "Transcribing..." in the input field while processing
+      setInput("Transcribing...");
+      
+      // Convert blob to base64
+      const audioBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          // Properly extract base64 data from data URL
+          const result = reader.result as string;
+          if (result.startsWith('data:')) {
+            // Extract base64 data after the comma
+            const base64data = result.split(',')[1];
+            resolve(base64data);
+          } else {
+            // If it's already base64, use as is
+            resolve(result);
+          }
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(audioBlob);
+      });
+
+      // Get the MIME type from the blob
+      const mimeType = audioBlob.type || 'audio/webm;codecs=opus';
+      
+      // Get language code for API
+      const languageCode = getLanguageApiCode(selectedLanguage);
+
+      // Transcribe using the AI processor
+      const result = await aiProcessor.transcribe(audioBase64, mimeType, languageCode);
+      
+      // Set the transcribed text as input
+      setInput(result.transcription);
+    } catch (error) {
+      console.error("Transcription error:", error);
+      toast.error("Failed to transcribe audio");
+      // Clear the "Transcribing..." text on error
+      setInput("");
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
+  // Start recording audio
+  const startRecording = async () => {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Audio recording not supported in this browser');
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      });
+
+      audioChunksRef.current = [];
+      // Use a widely supported MIME type
+      mediaRecorderRef.current = new MediaRecorder(stream, {
+        mimeType: 'audio/webm;codecs=opus'
+      });
+
+      mediaRecorderRef.current.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorderRef.current.onstop = async () => {
+        // Stop all tracks
+        stream.getTracks().forEach(track => track.stop());
+
+        if (audioChunksRef.current.length > 0) {
+          // Create blob with the same MIME type as the recorder
+          const audioBlob = new Blob(audioChunksRef.current, { 
+            type: 'audio/webm;codecs=opus' 
+          });
+
+          try {
+            await transcribeAudio(audioBlob);
+          } catch (error) {
+            console.error('Transcription failed:', error);
+            toast.error("Voice transcription failed. Please try again or type your message.");
+          }
+        }
+      };
+
+      mediaRecorderRef.current.start();
+      setIsRecording(true);
+    } catch (error) {
+      console.error('Error starting recording:', error);
+      toast.error("Microphone access is required for voice input. Please allow microphone permissions.");
+    }
+  };
+
+  // Stop recording audio
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
+  // Text-to-speech function
+  const speakText = (text: string) => {
+    if (synthRef.current) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      // Use the selected language directly for speech synthesis
+      // Some browsers may require specific language codes for speech synthesis
+      utterance.lang = selectedLanguage;
+      utterance.rate = 0.8;
+      utterance.pitch = 1;
+      synthRef.current.speak(utterance);
+    }
+  };
+
   const handleSend = async () => {
     if ((!input.trim() && !attachedImage) || isLoading) return;
 
@@ -442,43 +610,10 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ sessionId, contacts, resolve
         }
       }
       
-      // Fallback to Gemini service if AI processor is not available or fails
-      const { text, draft } = await sendMessageToGemini(
-          newUserMessage.text, 
-          currentImage || undefined, 
-          messages
-      );
 
       const botMsgId = (Date.now() + 1).toString();
       
       const newBotMessages: Message[] = [];
-
-      if (text) {
-          newBotMessages.push({
-              id: botMsgId,
-              sender: Sender.Bot,
-              type: MessageType.Text,
-              text: text,
-              timestamp: new Date(),
-          });
-      }
-
-      if (draft) {
-          newBotMessages.push({
-              id: botMsgId + '_draft',
-              sender: Sender.Bot,
-              type: MessageType.Draft,
-              text: '',
-              draft: {
-                  name: draft.name,
-                  description: draft.description,
-                  network: draft.network || 'Sui',
-                  gas: draft.estimatedGas || '0.001 SUI',
-                  image: currentImage || undefined
-              },
-              timestamp: new Date(),
-          });
-      }
 
       setMessages(prev => [...prev, ...newBotMessages]);
 
@@ -538,6 +673,28 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ sessionId, contacts, resolve
     }
   };
 
+  // Define supported languages
+  const supportedLanguages = [
+    // Nigerian Languages
+    { code: 'ig-NG', name: 'Igbo', flag: '🇳🇬', nativeName: 'Ásụ̀sụ́ Ìgbò' },
+    { code: 'yo-NG', name: 'Yoruba', flag: '🇳🇬', nativeName: 'Èdè Yorùbá' },
+    { code: 'ha-NG', name: 'Hausa', flag: '🇳🇬', nativeName: 'Harshen Hausa' },
+
+    // International Languages
+    { code: 'en-US', name: 'English', flag: '🇺🇸', nativeName: 'English' },
+    { code: 'es-ES', name: 'Spanish', flag: '🇪🇸', nativeName: 'Español' },
+    { code: 'fr-FR', name: 'French', flag: '🇫🇷', nativeName: 'Français' },
+    { code: 'de-DE', name: 'German', flag: '🇩🇪', nativeName: 'Deutsch' },
+    { code: 'it-IT', name: 'Italian', flag: '🇮🇹', nativeName: 'Italiano' },
+    { code: 'pt-BR', name: 'Portuguese', flag: '🇧🇷', nativeName: 'Português' },
+    { code: 'ja-JP', name: 'Japanese', flag: '🇯🇵', nativeName: '日本語' },
+    { code: 'ko-KR', name: 'Korean', flag: '🇰🇷', nativeName: '한국어' },
+    { code: 'zh-CN', name: 'Chinese', flag: '🇨🇳', nativeName: '中文' },
+  ];
+
+  // Get current language details
+  const currentLanguage = supportedLanguages.find(lang => lang.code === selectedLanguage) || supportedLanguages[0];
+
   return (
     <div className="flex-1 flex flex-col h-full relative">
       {/* Messages Feed */}
@@ -593,6 +750,71 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ sessionId, contacts, resolve
                     onChange={handleImageUpload}
                 />
                 
+                <div className="">
+                {/* Language Selector */}
+                <div className="relative">
+                  <Tooltip content="Select language">
+                    <Button 
+                      ref={languageButtonRef}
+                      variant="ghost" 
+                      size="icon" 
+                      className="text-slate-400 hover:text-slate-700"
+                      onClick={(e) => {
+                        e.stopPropagation(); // Stop the click from bubbling up
+                        setShowLanguageDropdown(prev => !prev);
+                      }}
+                    >
+                      <Globe size={20} />
+                    </Button>
+                  </Tooltip>
+                  
+                  {/* Language Dropdown */}
+                  {showLanguageDropdown && (
+                    <div 
+                      className="absolute bottom-full left-0 mb-2 w-64 bg-white rounded-xl shadow-lg border border-slate-200 py-2 z-10"
+                      onClick={(e) => e.stopPropagation()} // Stop clicks inside dropdown from closing it
+                    >
+                      <div className="max-h-60 overflow-y-auto">
+                        {supportedLanguages.map((lang) => (
+                          <button
+                            key={lang.code}
+                            onClick={(e) => {
+                              e.stopPropagation(); // Stop propagation
+                              setSelectedLanguage(lang.code);
+                              localStorage.setItem('mylo_selected_language', lang.code);
+                              setShowLanguageDropdown(false);
+                            }}
+                            className={`w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-slate-50 ${
+                              selectedLanguage === lang.code ? 'bg-slate-100' : ''
+                            }`}
+                          >
+                            <span className="text-lg">{lang.flag}</span>
+                            <div>
+                              <div className="font-medium text-slate-800">{lang.name}</div>
+                              <div className="text-xs text-slate-500">{lang.nativeName}</div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                </div>
+                
+                {/* Voice Recording Button */}
+                <Tooltip content={isRecording ? "Stop recording" : "Voice input"}>
+                  <Button 
+                    ref={micButtonRef}
+                    variant="ghost" 
+                    size="icon" 
+                    className={`text-slate-400 ${isRecording ? 'text-red-500 animate-pulse' : 'hover:text-slate-700'}`}
+                    onClick={isRecording ? stopRecording : startRecording}
+                    disabled={isTranscribing}
+                  >
+                    {isRecording ? <Square size={20} /> : <Mic size={20} />}
+                  </Button>
+                </Tooltip>
+                
                 <input
                     type="text"
                     value={input}
@@ -600,15 +822,10 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ sessionId, contacts, resolve
                     onKeyDown={(e) => e.key === 'Enter' && handleSend()}
                     placeholder="Ask MYLO anything..."
                     className="flex-1 bg-transparent border-none outline-none text-slate-700 placeholder:text-slate-400 font-medium h-10"
-                    disabled={isLoading}
+                    disabled={isLoading || isTranscribing}
                 />
                 
                 <div className="flex items-center gap-1 border-l border-slate-100 pl-2">
-                     <Tooltip content="Use voice input">
-                         <Button variant="ghost" size="icon" className="text-slate-400">
-                            <Mic size={20} />
-                         </Button>
-                     </Tooltip>
                      <Tooltip content="Send message">
                         <Button 
                             variant="primary" 

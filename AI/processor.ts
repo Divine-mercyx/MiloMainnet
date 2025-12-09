@@ -1,49 +1,35 @@
-// Main AI processor for frontend - combines all functionality
-import { initializeAI } from './aiClient';
-import { routeIntent } from './router';
-import { handleCommand } from './commandHandler';
-import { handleConversation } from './conversationHandler';
-import { transcribeAudio } from './transcribeHandler.ts';
-import type { AIModels, CommandResult, ConversationResult, TranscriptionResult, Contact } from "../types/types";
+// Main AI processor for frontend - connects to external AI service
+import type { CommandResult, ConversationResult, TranscriptionResult, Contact } from "../types/types";
 
 /**
  * Main AI processor class for frontend use
  */
 export class AIProcessor {
-    private apiKey: string;
-    private models: AIModels | null;
     private initialized: boolean;
+    private apiUrl: string;
+    private transcribeUrl: string;
 
     /**
      * Create an AI processor
-     * @param {string} apiKey - Google Generative AI API key
      */
-    constructor(apiKey: string) {
-        this.apiKey = apiKey;
-        this.models = null;
+    constructor() {
         this.initialized = false;
+        this.apiUrl = "https://milobrain-production.up.railway.app/api/v1/ai/response";
+        this.transcribeUrl = "https://milobrain-production.up.railway.app/api/v1/ai/transcribe";
     }
 
     /**
-     * Initialize AI models
+     * Initialize AI processor
      * @returns {Promise<void>}
      */
     async initialize(): Promise<void> {
-        if (!this.apiKey) {
-            throw new Error("API key is required for initialization");
-        }
-        
-        try {
-            this.models = initializeAI(this.apiKey);
-            this.initialized = true;
-        } catch (error) {
-            console.error("Failed to initialize AI models:", error);
-            throw new Error("AI initialization failed");
-        }
+        // No initialization needed for external service
+        this.initialized = true;
+        console.log("AI Processor initialized!");
     }
 
     /**
-     * Process user input through the full AI pipeline
+     * Process user input through the external AI service
      * @param {string} prompt - User input to process
      * @param {Contact[]} contacts - User's contact list (optional)
      * @returns {Promise<CommandResult | ConversationResult>} Processing result
@@ -58,26 +44,24 @@ export class AIProcessor {
         }
 
         try {
-            // Step 1: Classify intent
-            const { intent } = await routeIntent(this.models!, prompt);
+            const response = await fetch(this.apiUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                    prompt,
+                    contacts
+                })
+            });
 
-            // Step 2: Process based on intent
-            let response: CommandResult | ConversationResult;
-            switch (intent) {
-                case 'command':
-                    response = await handleCommand(this.models!, prompt, contacts);
-                    break;
-
-                case 'question':
-                case 'greeting':
-                    response = await handleConversation(this.models!, prompt, intent);
-                    break;
-
-                default:
-                    throw new Error(`Unknown intent: ${intent}`);
+            if (!response.ok) {
+                throw new Error(`API request failed with status ${response.status}`);
             }
 
-            return response;
+            const data = await response.json();
+            
+            return data;
         } catch (error) {
             console.error("Error processing input:", error);
             throw new Error("Failed to process input");
@@ -96,6 +80,30 @@ export class AIProcessor {
             throw new Error("AI processor not initialized. Call initialize() first.");
         }
 
-        return await transcribeAudio(this.models!, audioBase64, mimeType, language);
+        try {
+            const response = await fetch(this.transcribeUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                    audio: audioBase64,
+                    mimeType: mimeType,
+                    language: language
+                })
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Transcription API request failed with status ${response.status}: ${errorText}`);
+            }
+
+            const data = await response.json();
+            
+            return data;
+        } catch (error) {
+            console.error("Error transcribing audio:", error);
+            throw new Error("Failed to transcribe audio");
+        }
     }
 }

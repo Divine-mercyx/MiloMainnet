@@ -23,21 +23,174 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { Message, Sender, MessageType } from '../types';
-import { AIProcessor } from '../AI/index';
+import { AIProcessor } from '../AI/index.ts';
 import { useConnectWallet, useWallets } from '@mysten/dapp-kit';
 
-
-const API_KEY = import.meta.env.VITE_AI_API_KEY;
+const API_KEY = null; // Not needed anymore since we're using external service
 let aiProcessor: AIProcessor | null = null;
 
 // Add a check for the API key
-if (!API_KEY) {
-  console.warn("VITE_AI_API_KEY is not set. AI features will be disabled.");
-}
+console.log("Using external AI service");
 
 interface LandingPageProps {
   onConnect: () => void;
 }
+
+// Component definitions moved to the top to fix the "Expected 0 arguments, but got 1" error
+const ProblemCard: React.FC<{ icon: React.ReactNode, text: string, delay?: string }> = ({ icon, text, delay = "0" }) => (
+    <div className="flex items-center gap-4 p-5 rounded-2xl bg-slate-800/40 border border-slate-700/50 hover:bg-slate-800/80 hover:border-teal-500/30 transition-all group backdrop-blur-sm">
+        <div className="w-12 h-12 rounded-xl bg-slate-700/50 flex items-center justify-center text-teal-400 group-hover:scale-110 transition-transform group-hover:bg-teal-500/20">
+            {icon}
+        </div>
+        <span className="text-slate-200 font-medium text-lg">{text}</span>
+    </div>
+);
+
+const FeatureCard: React.FC<{ icon: React.ReactNode, title: string, description: string }> = ({ icon, title, description }) => (
+  <div className="bg-slate-50 p-8 rounded-[2rem] hover:bg-white border border-transparent hover:border-slate-100 hover:shadow-2xl hover:shadow-slate-200/50 transition-all duration-300 group">
+    <div className="w-16 h-16 rounded-2xl bg-white flex items-center justify-center mb-6 shadow-sm border border-slate-100 group-hover:scale-110 transition-transform text-[#3B8D85] group-hover:bg-teal-50">
+      {icon}
+    </div>
+    <h3 className="text-xl font-bold text-slate-900 mb-3">{title}</h3>
+    <p className="text-slate-500 leading-relaxed">{description}</p>
+  </div>
+);
+
+const LandingChatWidget: React.FC = () => {
+    const [messages, setMessages] = useState<Message[]>([
+        {
+            id: 'welcome',
+            sender: Sender.Bot,
+            type: MessageType.Text,
+            text: "Hi! I'm MYLO. Ask me anything about blockchain, Sui, or how I can help manage your finances.",
+            timestamp: new Date()
+        }
+    ]);
+    const [input, setInput] = useState('');
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+    const initAI = async () => {
+        try {
+        aiProcessor = new AIProcessor(); // No API key!
+        await aiProcessor.initialize();
+        console.log("AI Processor initialized successfully!");
+        } catch (error) {
+        console.error("Failed to initialize AI processor:", error);
+        }
+    };
+    
+    initAI();
+    }, []);
+
+    const handleSend = async () => {
+        if (!input.trim() || loading || !aiProcessor) {
+            // If AI processor is not available, show a friendly message
+        if (!aiProcessor) {
+            setMessages(prev => [...prev, {
+            id: (Date.now() + 1).toString(),
+            sender: Sender.Bot,
+            type: MessageType.Text,
+            text: "AI features are currently unavailable. Please try again later.",
+            timestamp: new Date()
+            }]);
+            return;
+        }
+            return;
+        }
+        
+        const userMsg = {
+            id: Date.now().toString(),
+            sender: Sender.User,
+            type: MessageType.Text,
+            text: input,
+            timestamp: new Date()
+        };
+        
+        setMessages(prev => [...prev, userMsg]);
+        setInput('');
+        setLoading(true);
+
+        try {
+            const data = await aiProcessor.processInput(input);
+            
+            let botText = "";
+            if ('action' in data) {
+                botText = data.message || data.reply || "Sorry, something went wrong.";
+            } else {
+                botText = data.message || "Sorry, something went wrong.";
+            }
+            
+            const botMsg = {
+                id: (Date.now() + 1).toString(),
+                sender: Sender.Bot,
+                type: MessageType.Text,
+                text: botText,
+                timestamp: new Date()
+            };
+            setMessages(prev => [...prev, botMsg]);
+        } catch (error) {
+            console.error("AI processing error:", error);
+            const errorMsg = {
+                id: (Date.now() + 1).toString(),
+                sender: Sender.Bot,
+                type: MessageType.Text,
+                text: "Sorry, I encountered an error processing your request.",
+                timestamp: new Date()
+            };
+            setMessages(prev => [...prev, errorMsg]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="flex flex-col h-[400px]">
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/30">
+                {messages.map(msg => (
+                    <div key={msg.id} className={`flex ${msg.sender === Sender.User ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[80%] rounded-2xl px-5 py-3.5 text-sm leading-relaxed shadow-sm ${
+                            msg.sender === Sender.User 
+                            ? 'bg-[#0F172A] text-white rounded-tr-sm' 
+                            : 'bg-white text-slate-700 border border-slate-100 rounded-tl-sm'
+                        }`}>
+                            {msg.text}
+                        </div>
+                    </div>
+                ))}
+                {loading && (
+                    <div className="flex justify-start">
+                        <div className="bg-white border border-slate-100 rounded-2xl rounded-tl-sm px-4 py-3 flex items-center gap-1.5 shadow-sm">
+                            <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"></span>
+                            <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce delay-75"></span>
+                            <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce delay-150"></span>
+                        </div>
+                    </div>
+                )}
+            </div>
+            <div className="p-4 bg-white border-t border-slate-100">
+                <div className="flex items-center gap-2 bg-slate-50 rounded-full border border-slate-200 px-2 py-2 shadow-inner focus-within:bg-white focus-within:ring-2 focus-within:ring-teal-100 transition-all">
+                    <input 
+                        type="text" 
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                        placeholder="Type a message..."
+                        className="flex-1 bg-transparent border-none outline-none px-4 text-sm text-slate-800 placeholder:text-slate-400"
+                        disabled={loading}
+                    />
+                    <button 
+                        onClick={handleSend}
+                        disabled={loading || !input.trim()}
+                        className="w-9 h-9 rounded-full bg-[#0F172A] text-white flex items-center justify-center hover:bg-slate-700 disabled:opacity-50 transition-colors shadow-sm"
+                    >
+                        <Send size={16} />
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onConnect }) => {
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
@@ -506,7 +659,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onConnect }) => {
                          <p className="text-slate-400">Leveraging the speed and scalability of the Sui Network.</p>
                      </div>
                      <div className="mt-8 flex gap-2 flex-wrap">
-                         <div className="px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-md text-sm font-medium border border-white/10">Instant Finality</div>
+                         <div className="px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-md text-sm font-medium border border-white-10">Instant Finality</div>
                          <div className="px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-md text-sm font-medium border border-white-10">Low Gas</div>
                      </div>
                  </div>
@@ -572,164 +725,4 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onConnect }) => {
       </footer>
     </div>
   );
-};
-
-const ProblemCard: React.FC<{ icon: React.ReactNode, text: string, delay?: string }> = ({ icon, text, delay = "0" }) => (
-    <div className="flex items-center gap-4 p-5 rounded-2xl bg-slate-800/40 border border-slate-700/50 hover:bg-slate-800/80 hover:border-teal-500/30 transition-all group backdrop-blur-sm">
-        <div className="w-12 h-12 rounded-xl bg-slate-700/50 flex items-center justify-center text-teal-400 group-hover:scale-110 transition-transform group-hover:bg-teal-500/20">
-            {icon}
-        </div>
-        <span className="text-slate-200 font-medium text-lg">{text}</span>
-    </div>
-);
-
-const FeatureCard: React.FC<{ icon: React.ReactNode, title: string, description: string }> = ({ icon, title, description }) => (
-  <div className="bg-slate-50 p-8 rounded-[2rem] hover:bg-white border border-transparent hover:border-slate-100 hover:shadow-2xl hover:shadow-slate-200/50 transition-all duration-300 group">
-    <div className="w-16 h-16 rounded-2xl bg-white flex items-center justify-center mb-6 shadow-sm border border-slate-100 group-hover:scale-110 transition-transform text-[#3B8D85] group-hover:bg-teal-50">
-      {icon}
-    </div>
-    <h3 className="text-xl font-bold text-slate-900 mb-3">{title}</h3>
-    <p className="text-slate-500 leading-relaxed">{description}</p>
-  </div>
-);
-
-const LandingChatWidget: React.FC = () => {
-    const [messages, setMessages] = useState<Message[]>([
-        {
-            id: 'welcome',
-            sender: Sender.Bot,
-            type: MessageType.Text,
-            text: "Hi! I'm MYLO. Ask me anything about blockchain, Sui, or how I can help manage your finances.",
-            timestamp: new Date()
-        }
-    ]);
-    const [input, setInput] = useState('');
-    const [loading, setLoading] = useState(false);
-
-    useEffect(() => {
-        const initAI = async () => {
-            // Only initialize if API key is available
-            if (API_KEY) {
-                try {
-                    aiProcessor = new AIProcessor(API_KEY);
-                    await aiProcessor.initialize();
-                    console.log("AI Processor initialized successfully!");
-                } catch (error) {
-                    console.error("Failed to initialize AI processor:", error);
-                }
-            } else {
-                console.warn("Skipping AI processor initialization - no API key available");
-            }
-        };
-        
-        initAI();
-    }, []);
-
-    const handleSend = async () => {
-        if (!input.trim() || loading || !aiProcessor) {
-            // If AI processor is not available, show a friendly message
-            if (!aiProcessor) {
-                setMessages(prev => [...prev, {
-                    id: (Date.now() + 1).toString(),
-                    sender: Sender.Bot,
-                    type: MessageType.Text,
-                    text: "AI features are currently unavailable. Please try again later.",
-                    timestamp: new Date()
-                }]);
-                return;
-            }
-            return;
-        }
-        
-        const userMsg = {
-            id: Date.now().toString(),
-            sender: Sender.User,
-            type: MessageType.Text,
-            text: input,
-            timestamp: new Date()
-        };
-        
-        setMessages(prev => [...prev, userMsg]);
-        setInput('');
-        setLoading(true);
-
-        try {
-            const data = await aiProcessor.processInput(input);
-            
-            let botText = "";
-            if ('action' in data) {
-                botText = data.message || data.reply || "Sorry, something went wrong.";
-            } else {
-                botText = data.message || "Sorry, something went wrong.";
-            }
-            
-            const botMsg = {
-                id: (Date.now() + 1).toString(),
-                sender: Sender.Bot,
-                type: MessageType.Text,
-                text: botText,
-                timestamp: new Date()
-            };
-            setMessages(prev => [...prev, botMsg]);
-        } catch (error) {
-            console.error("AI processing error:", error);
-            const errorMsg = {
-                id: (Date.now() + 1).toString(),
-                sender: Sender.Bot,
-                type: MessageType.Text,
-                text: "Sorry, I encountered an error processing your request.",
-                timestamp: new Date()
-            };
-            setMessages(prev => [...prev, errorMsg]);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    return (
-        <div className="flex flex-col h-[400px]">
-            <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/30">
-                {messages.map(msg => (
-                    <div key={msg.id} className={`flex ${msg.sender === Sender.User ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[80%] rounded-2xl px-5 py-3.5 text-sm leading-relaxed shadow-sm ${
-                            msg.sender === Sender.User 
-                            ? 'bg-[#0F172A] text-white rounded-tr-sm' 
-                            : 'bg-white text-slate-700 border border-slate-100 rounded-tl-sm'
-                        }`}>
-                            {msg.text}
-                        </div>
-                    </div>
-                ))}
-                {loading && (
-                    <div className="flex justify-start">
-                        <div className="bg-white border border-slate-100 rounded-2xl rounded-tl-sm px-4 py-3 flex items-center gap-1.5 shadow-sm">
-                            <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"></span>
-                            <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce delay-75"></span>
-                            <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce delay-150"></span>
-                        </div>
-                    </div>
-                )}
-            </div>
-            <div className="p-4 bg-white border-t border-slate-100">
-                <div className="flex items-center gap-2 bg-slate-50 rounded-full border border-slate-200 px-2 py-2 shadow-inner focus-within:bg-white focus-within:ring-2 focus-within:ring-teal-100 transition-all">
-                    <input 
-                        type="text" 
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                        placeholder="Type a message..."
-                        className="flex-1 bg-transparent border-none outline-none px-4 text-sm text-slate-800 placeholder:text-slate-400"
-                        disabled={loading}
-                    />
-                    <button 
-                        onClick={handleSend}
-                        disabled={loading || !input.trim()}
-                        className="w-9 h-9 rounded-full bg-[#0F172A] text-white flex items-center justify-center hover:bg-slate-700 disabled:opacity-50 transition-colors shadow-sm"
-                    >
-                        <Send size={16} />
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
 };
