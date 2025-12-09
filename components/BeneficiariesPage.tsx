@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
 import { Button } from './Button';
-import { Plus, Trash2, Copy, User, Search, AlertCircle, Check } from 'lucide-react';
+import { Plus, Trash2, Copy, User, Search, AlertCircle, Check, Send } from 'lucide-react';
 import { Tooltip } from './Tooltip';
+import { useSignAndExecuteTransaction, useCurrentAccount } from '@mysten/dapp-kit';
+import toast from 'react-hot-toast';
+import { buildTransaction } from './lib/suiTxBuilder';
 
 interface Contact {
   id: string;
@@ -11,59 +14,159 @@ interface Contact {
 
 interface BeneficiariesPageProps {
   contacts: Contact[];
-  addContact: (newContact: Omit<Contact, 'id'>) => void;
-  deleteContact: (id: string) => void;
+  addContact: (newContact: Omit<Contact, 'id'>) => Promise<any>;
+  deleteContact: (id: string) => Promise<any>;
+  loading?: boolean;
+  error?: string | null;
+  refetch: () => void;
 }
 
-export const BeneficiariesPage: React.FC<BeneficiariesPageProps> = ({ contacts: beneficiaries, addContact, deleteContact }) => {
+export const BeneficiariesPage: React.FC<BeneficiariesPageProps> = ({ 
+  contacts: beneficiaries, 
+  addContact, 
+  deleteContact,
+  loading,
+  error: hookError,
+  refetch
+}) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [newName, setNewName] = useState('');
   const [newAddress, setNewAddress] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  
+  // Send modal states
+  const [isSending, setIsSending] = useState(false);
+  const [sendAmount, setSendAmount] = useState('');
+  const [sendContact, setSendContact] = useState<Contact | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
+  
+  const currentAccount = useCurrentAccount();
+  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
 
-  const handleAdd = () => {
-    setError(null);
+  const handleAdd = async () => {
+    setFormError(null);
     if (!newName.trim() || !newAddress.trim()) {
-      setError("Name and address are required.");
+      setFormError("Name and address are required.");
       return;
     }
 
     // Check for duplicates
     const duplicateName = beneficiaries.find(b => b.name.toLowerCase() === newName.trim().toLowerCase());
     if (duplicateName) {
-      setError("A beneficiary with this name already exists.");
+      setFormError("A beneficiary with this name already exists.");
       return;
     }
 
     const duplicateAddress = beneficiaries.find(b => b.address === newAddress.trim());
     if (duplicateAddress) {
-      setError("This wallet address is already saved.");
+      setFormError("This wallet address is already saved.");
       return;
     }
 
-    // Use the addContact function passed as props
-    addContact({
-      name: newName.trim(),
-      address: newAddress.trim()
-    });
-    
-    // Reset form
-    setNewName('');
-    setNewAddress('');
-    setIsAdding(false);
+    try {
+      // Create the transaction
+      const tx = await addContact({
+        name: newName.trim(),
+        address: newAddress.trim()
+      });
+      
+      // Sign and execute the transaction
+      const result = await signAndExecute({ transaction: tx });
+      
+      // Check if transaction was successful
+      if (result.digest) {
+        toast.success("Contact added successfully!");
+        // Reset form
+        setNewName('');
+        setNewAddress('');
+        setIsAdding(false);
+        // Refresh contacts
+        refetch();
+      } else {
+        throw new Error("Transaction failed");
+      }
+    } catch (err: any) {
+      console.error("Error adding contact:", err);
+      setFormError(err.message || "Failed to add contact. Please try again.");
+      toast.error("Failed to add contact");
+    }
   };
 
-  const handleDelete = (id: string) => {
-    // Use the deleteContact function passed as props
-    deleteContact(id);
+  const handleDelete = async (id: string) => {
+    try {
+      // Create the transaction
+      const tx = await deleteContact(id);
+      
+      // Sign and execute the transaction
+      const result = await signAndExecute({ transaction: tx });
+      
+      // Check if transaction was successful
+      if (result.digest) {
+        toast.success("Contact deleted successfully!");
+        // Refresh contacts
+        refetch();
+      } else {
+        throw new Error("Transaction failed");
+      }
+    } catch (err: any) {
+      console.error("Error deleting contact:", err);
+      toast.error("Failed to delete contact");
+    }
   };
 
   const handleCopy = (id: string, text: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  // Handle send button click
+  const handleSendClick = (contact: Contact) => {
+    setSendContact(contact);
+    setIsSending(true);
+    setSendAmount('');
+    setSendError(null);
+  };
+
+  // Handle send transaction
+  const handleSendTransaction = async () => {
+    if (!sendContact || !sendAmount) {
+      setSendError("Please enter an amount");
+      return;
+    }
+
+    const amount = parseFloat(sendAmount);
+    if (isNaN(amount) || amount <= 0) {
+      setSendError("Please enter a valid amount");
+      return;
+    }
+
+    try {
+      // Create the transfer transaction
+      const tx = await buildTransaction({
+        action: "transfer",
+        amount: amount,
+        recipient: sendContact.address
+      });
+
+      // Sign and execute the transaction
+      const result = await signAndExecute({ transaction: tx });
+
+      if (result.digest) {
+        toast.success(`Successfully sent ${amount} SUI to ${sendContact.name}!`);
+        setIsSending(false);
+        setSendContact(null);
+        setSendAmount('');
+      } else {
+        throw new Error("Transaction failed");
+      }
+    } catch (err: any) {
+      console.error("Error sending SUI:", err);
+      setSendError(err.message || "Failed to send SUI. Please try again.");
+      toast.error("Failed to send SUI");
+    }
   };
 
   const filtered = beneficiaries.filter(b => 
@@ -113,10 +216,10 @@ export const BeneficiariesPage: React.FC<BeneficiariesPageProps> = ({ contacts: 
                         />
                     </div>
                 </div>
-                {error && (
+                {(formError || hookError) && (
                     <div className="flex items-center gap-2 text-red-500 text-sm mb-4 bg-red-50 p-2 rounded-lg">
                         <AlertCircle size={16} />
-                        {error}
+                        {formError || hookError}
                     </div>
                 )}
                 <div className="flex justify-end gap-3">
@@ -138,9 +241,16 @@ export const BeneficiariesPage: React.FC<BeneficiariesPageProps> = ({ contacts: 
             />
         </div>
 
+        {/* Loading indicator */}
+        {loading && (
+          <div className="text-center py-4">
+            <p>Loading contacts...</p>
+          </div>
+        )}
+
         {/* List */}
         <div className="grid gap-4">
-            {filtered.length === 0 ? (
+            {filtered.length === 0 && !loading ? (
                 <div className="text-center py-20">
                     <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400">
                         <User size={32} />
@@ -173,7 +283,13 @@ export const BeneficiariesPage: React.FC<BeneficiariesPageProps> = ({ contacts: 
                             </div>
                         </div>
                         <div className="flex items-center gap-2 w-full md:w-auto justify-end">
-                            <Button variant="secondary" size="sm" className="text-slate-500 hover:text-slate-700">
+                            <Button 
+                              variant="secondary" 
+                              size="sm" 
+                              className="text-slate-500 hover:text-slate-700"
+                              onClick={() => handleSendClick(b)}
+                            >
+                                <Send size={14} className="mr-1" />
                                 Send
                             </Button>
                             <Tooltip content="Delete Contact">
@@ -190,6 +306,71 @@ export const BeneficiariesPage: React.FC<BeneficiariesPageProps> = ({ contacts: 
             )}
         </div>
       </div>
+
+      {/* Send Modal */}
+      {isSending && sendContact && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 animate-fade-in-up">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-slate-800">Send SUI</h3>
+              <button 
+                onClick={() => setIsSending(false)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="mb-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-100 to-indigo-100 flex items-center justify-center text-[#3B8D85] font-bold">
+                  {sendContact.name.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <p className="font-medium text-slate-800">{sendContact.name}</p>
+                  <p className="text-xs text-slate-500 font-mono truncate">{sendContact.address}</p>
+                </div>
+              </div>
+              
+              <div className="mb-4">
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Amount (SUI)</label>
+                <input 
+                  type="number" 
+                  value={sendAmount}
+                  onChange={(e) => setSendAmount(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-[#3B8D85] focus:ring-2 focus:ring-teal-50 outline-none transition-all text-lg"
+                  placeholder="0.00"
+                  step="0.000000001"
+                />
+                <p className="text-xs text-slate-500 mt-1">Enter amount in SUI</p>
+              </div>
+              
+              {sendError && (
+                <div className="flex items-center gap-2 text-red-500 text-sm mb-4 bg-red-50 p-2 rounded-lg">
+                  <AlertCircle size={16} />
+                  {sendError}
+                </div>
+              )}
+            </div>
+            
+            <div className="flex gap-3">
+              <Button 
+                variant="secondary" 
+                onClick={() => setIsSending(false)}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleSendTransaction}
+                className="flex-1"
+              >
+                Send SUI
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

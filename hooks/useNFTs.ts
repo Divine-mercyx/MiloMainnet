@@ -17,7 +17,9 @@ export function useNFTs() {
   const [error, setError] = useState<string | null>(null);
 
   const fetchNFTs = useCallback(async () => {
+    console.log('Fetching NFTs...');
     if (!currentAccount?.address) {
+      console.log('No current account, setting NFTs to empty array');
       setNfts([]);
       return;
     }
@@ -25,18 +27,21 @@ export function useNFTs() {
     try {
       setLoading(true);
       setError(null);
+      console.log('Fetching NFTs for address:', currentAccount.address);
       
       // Fetch owned objects
       const response = await suiClient.getOwnedObjects({
         owner: currentAccount.address,
         filter: {
-          StructType: "0xefcbc248490404305070c7de5c7c0a7dc4e4e7bcb1fc796c64a61d7c9b80a7ee::nft_module::MiloNFT"
+          StructType: "0x65d223eb2c238ff52ddb179af628b5608cdc4e34739698fbde316f47f2ab480d::nft_module::MiloNFT"
         },
         options: {
           showContent: true,
           showDisplay: true
         }
       });
+
+      console.log('Received response from Sui client:', response);
 
       const nftList: MiloNFT[] = [];
       
@@ -45,7 +50,6 @@ export function useNFTs() {
           const fields = obj.data.content.fields as any;
           // Extract metadata correctly from the nested structure
           const metadata = fields.metadata || {};
-          console.log(obj)
           nftList.push({
             id: obj.data.objectId,
             name: metadata.fields.name || "Unnamed NFT",
@@ -56,11 +60,18 @@ export function useNFTs() {
         }
       }
 
+      console.log('Processed NFTs:', nftList);
       setNfts(nftList);
-    } catch (err: any) {
-      setError(err.message || "Failed to fetch NFTs");
+    } catch (err: unknown) {
+      console.error('Error fetching NFTs:', err);
+      // Ensure error is always a string
+      const errorMessage = err instanceof Error ? err.message : String(err) || "Failed to fetch NFTs";
+      setError(errorMessage);
+      // Also set nfts to empty array on error to prevent stale data
+      setNfts([]);
     } finally {
       setLoading(false);
+      console.log('Finished fetching NFTs');
     }
   }, [suiClient, currentAccount?.address]);
 

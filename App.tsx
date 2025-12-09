@@ -34,7 +34,7 @@ const App: React.FC = () => {
   const disconnectWalletMutation = useDisconnectWallet();
   
   // Use the contacts hook at the App level
-  const { contacts, addContact, deleteContact, resolveContact } = useContacts();
+  const { contacts, addContact, deleteContact, resolveContact, loading, error, refetch } = useContacts();
   
   // Add debugging to see what contacts are loaded
   useEffect(() => {
