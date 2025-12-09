@@ -110,11 +110,7 @@ export const SwapPage: React.FC = () => {
   useEffect(() => {
     const fetchBanks = async () => {
       try {
-        const response = await fetch('https://api.paystack.co/bank?country=nigeria', {
-          headers: {
-            'Authorization': `Bearer ${import.meta.env.PAYSTACK_SECRET_KEY || process.env.PAYSTACK_SECRET_KEY }`
-          }
-        });
+        const response = await fetch('https://api.paystack.co/bank?country=nigeria');
         
         if (response.ok) {
           const data = await response.json();
@@ -171,7 +167,7 @@ export const SwapPage: React.FC = () => {
         `https://api.paystack.co/bank/resolve?account_number=${accountNumber}&bank_code=${selectedBank.code}`,
         {
           headers: {
-            'Authorization': `Bearer ${import.meta.env.PAYSTACK_SECRET_KEY || process.env.PAYSTACK_SECRET_KEY || 'sk_test_7aab64a468bed7aeac7b4d1ccafcd2e111b0fae8'}`
+            'Authorization': `Bearer ${import.meta.env.PAYSTACK_SECRET_KEY}`
           }
         }
       );

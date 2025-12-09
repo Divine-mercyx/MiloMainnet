@@ -173,7 +173,6 @@ const App: React.FC = () => {
          {currentView === 'mint' && <MintPage />}
          {currentView === 'gallery' && <GalleryPage />}
          {currentView === 'swap' && <SwapPage />}
-         {currentView === 'fiat-swap' && <FiatSwapPage />}
          {currentView === 'beneficiaries' && <BeneficiariesPage contacts={contacts} addContact={addContact} deleteContact={deleteContact} />}
          {currentView === 'activity' && <ActivityPage onSelectSession={handleSelectSession} />}
          {currentView === 'dex' && <DexPage />}
