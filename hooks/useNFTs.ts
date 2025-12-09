@@ -17,7 +17,9 @@ export function useNFTs() {
   const [error, setError] = useState<string | null>(null);
 
   const fetchNFTs = useCallback(async () => {
+    console.log('Fetching NFTs...');
     if (!currentAccount?.address) {
+      console.log('No current account, setting NFTs to empty array');
       setNfts([]);
       return;
     }
@@ -25,6 +27,7 @@ export function useNFTs() {
     try {
       setLoading(true);
       setError(null);
+      console.log('Fetching NFTs for address:', currentAccount.address);
       
       // Fetch owned objects
       const response = await suiClient.getOwnedObjects({
@@ -38,6 +41,8 @@ export function useNFTs() {
         }
       });
 
+      console.log('Received response from Sui client:', response);
+
       const nftList: MiloNFT[] = [];
       
       for (const obj of response.data) {
@@ -45,7 +50,6 @@ export function useNFTs() {
           const fields = obj.data.content.fields as any;
           // Extract metadata correctly from the nested structure
           const metadata = fields.metadata || {};
-          console.log(obj)
           nftList.push({
             id: obj.data.objectId,
             name: metadata.fields.name || "Unnamed NFT",
@@ -56,11 +60,18 @@ export function useNFTs() {
         }
       }
 
+      console.log('Processed NFTs:', nftList);
       setNfts(nftList);
-    } catch (err: any) {
-      setError(err.message || "Failed to fetch NFTs");
+    } catch (err: unknown) {
+      console.error('Error fetching NFTs:', err);
+      // Ensure error is always a string
+      const errorMessage = err instanceof Error ? err.message : String(err) || "Failed to fetch NFTs";
+      setError(errorMessage);
+      // Also set nfts to empty array on error to prevent stale data
+      setNfts([]);
     } finally {
       setLoading(false);
+      console.log('Finished fetching NFTs');
     }
   }, [suiClient, currentAccount?.address]);
 

@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { Button } from './Button';
 import { Upload, X, Image as ImageIcon, Sparkles, CheckCircle2, Box, Info } from 'lucide-react';
@@ -43,14 +42,33 @@ export const MintPage: React.FC = () => {
     }
   };
 
-  // Add Walrus upload simulation function
-  const uploadToWalrus = async (file: File) => {
-    // In a real implementation, this would upload to Walrus
-    // For now, we'll simulate with a timeout and generate a fake blobId
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    const fakeBlobId = `blob_${Math.random().toString(36).substring(2, 15)}`;
-    const previewUrl = URL.createObjectURL(file);
-    return { blobId: fakeBlobId, previewUrl };
+  // Add Walrus upload function
+  const uploadToWalrus = async (file: File, walletAddress: string) => {
+    try {
+      const formData = new FormData();
+      formData.append('walrusUploadAddress', walletAddress);
+      formData.append('file', file);
+
+      const response = await fetch('https://walhost-production.up.railway.app/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Upload failed with status ${response.status}`);
+      }
+
+      const result = await response.json();
+      const blobId = result.blobId;
+      
+      // Create preview URL
+      const previewUrl = URL.createObjectURL(file);
+      
+      return { blobId, previewUrl };
+    } catch (error) {
+      console.error('Error uploading to Walrus:', error);
+      throw new Error('Failed to upload image to Walrus storage');
+    }
   };
 
   // Update handleMint to use Sui transaction
@@ -58,13 +76,14 @@ export const MintPage: React.FC = () => {
     if (!file) return toast.error("Please upload a file");
     if (!name) return toast.error("Please enter a title");
     if (!description) return toast.error("Please add a description");
+    if (!currentAccount?.address) return toast.error("Please connect your wallet");
     
     try {
       setIsMinting(true);
       toast.loading("Uploading data...");
       
-      // Upload to Walrus (simulated)
-      const result = await uploadToWalrus(file);
+      // Upload to Walrus
+      const result = await uploadToWalrus(file, currentAccount.address);
       setBlobId(result.blobId);
       setPreviewUrl(result.previewUrl);
       toast.dismiss();
