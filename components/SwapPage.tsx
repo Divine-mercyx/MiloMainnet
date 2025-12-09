@@ -35,6 +35,9 @@ export const SwapPage: React.FC = () => {
   const [nairaAmount, setNairaAmount] = useState('');
   const [isSwapping, setIsSwapping] = useState(false);
   const [suiBalance, setSuiBalance] = useState<number | null>(null);
+  const [suiToUsdRate, setSuiToUsdRate] = useState<number | null>(null);
+  const [usdToNgnRate, setUsdToNgnRate] = useState<number | null>(null);
+  const [isLoadingRates, setIsLoadingRates] = useState(false);
   
   // Exchange rates
   const [exchangeRates, setExchangeRates] = useState<{
@@ -85,6 +88,7 @@ export const SwapPage: React.FC = () => {
   // Fetch exchange rates
   useEffect(() => {
     const fetchExchangeRates = async () => {
+<<<<<<< HEAD
       try {
         const [suiPrice, usdToNgnRate] = await Promise.all([
           DataService.getSuiPrice(),
@@ -97,13 +101,39 @@ export const SwapPage: React.FC = () => {
         });
       } catch (err) {
         console.error("Error fetching exchange rates:", err);
+=======
+      setIsLoadingRates(true);
+      try {
+        // Fetch SUI to USD rate from CoinGecko
+        const coingeckoRes = await fetch(
+          'https://api.coingecko.com/api/v3/simple/price?ids=sui&vs_currencies=usd'
+        );
+        const coingeckoData = await coingeckoRes.json();
+        const suiUsdRate = coingeckoData.sui.usd;
+        setSuiToUsdRate(suiUsdRate);
+        
+        // Fetch USD to NGN rate from ExchangeRate-API
+        const forexRes = await fetch(
+          'https://api.exchangerate-api.com/v4/latest/USD'
+        );
+        const forexData = await forexRes.json();
+        const ngnRate = forexData.rates.NGN;
+        setUsdToNgnRate(ngnRate);
+      } catch (error) {
+        console.error('Error fetching exchange rates:', error);
+      } finally {
+        setIsLoadingRates(false);
+>>>>>>> acbd18f (stashed 2)
       }
     };
 
     fetchExchangeRates();
+<<<<<<< HEAD
     // Refresh rates every 5 minutes
     const interval = setInterval(fetchExchangeRates, 5 * 60 * 1000);
     return () => clearInterval(interval);
+=======
+>>>>>>> acbd18f (stashed 2)
   }, []);
 
   // Fetch Nigerian banks from Paystack
@@ -134,11 +164,19 @@ export const SwapPage: React.FC = () => {
     if (/^\d*\.?\d*$/.test(value)) {
       setSuiAmount(value);
       
+<<<<<<< HEAD
       // Calculate Naira amount using real-time exchange rates
       if (value && exchangeRates.suiToUsd && exchangeRates.usdToNgn) {
         const suiValue = parseFloat(value);
         const usdValue = suiValue * exchangeRates.suiToUsd;
         const nairaValue = usdValue * exchangeRates.usdToNgn;
+=======
+      // Calculate Naira amount based on real exchange rates
+      if (value && suiToUsdRate !== null && usdToNgnRate !== null) {
+        const suiValue = parseFloat(value);
+        const usdValue = suiValue * suiToUsdRate;
+        const nairaValue = usdValue * usdToNgnRate;
+>>>>>>> acbd18f (stashed 2)
         setNairaAmount(nairaValue.toFixed(2));
       } else {
         setNairaAmount('');
@@ -403,7 +441,17 @@ export const SwapPage: React.FC = () => {
               </div>
             </div>
             <div className="mt-2 text-xs text-slate-400">
+<<<<<<< HEAD
               ~${suiAmount ? (parseFloat(suiAmount) * (exchangeRates.suiToUsd || 1.85)).toFixed(2) : '0.00'}
+=======
+              {isLoadingRates ? (
+                <span>Loading rates...</span>
+              ) : suiToUsdRate !== null ? (
+                <span>~${suiAmount ? (parseFloat(suiAmount) * suiToUsdRate).toFixed(2) : '0.00'} USD</span>
+              ) : (
+                <span>Rate unavailable</span>
+              )}
+>>>>>>> acbd18f (stashed 2)
             </div>
           </div>
 
@@ -435,7 +483,13 @@ export const SwapPage: React.FC = () => {
               </div>
             </div>
             <div className="mt-2 text-xs text-slate-400">
-              ~₦{nairaAmount || '0.00'}
+              {isLoadingRates ? (
+                <span>Loading rates...</span>
+              ) : usdToNgnRate !== null ? (
+                <span>~₦{nairaAmount || '0.00'} NGN</span>
+              ) : (
+                <span>Rate unavailable</span>
+              )}
             </div>
           </div>
 
@@ -524,7 +578,17 @@ export const SwapPage: React.FC = () => {
           <div className="px-6 py-4 border-t border-slate-100 bg-white">
             <div className="flex justify-between text-xs text-slate-500 mb-2">
               <span className="flex items-center gap-1">Rate <Info size={10} /></span>
+<<<<<<< HEAD
               <span className="font-medium">1 SUI ≈ ₦{getCurrentExchangeRate().toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+=======
+              {isLoadingRates ? (
+                <span className="font-medium">Loading...</span>
+              ) : suiToUsdRate !== null && usdToNgnRate !== null ? (
+                <span className="font-medium">1 SUI ≈ ${(suiToUsdRate).toFixed(2)} USD ≈ ₦{(suiToUsdRate * usdToNgnRate).toFixed(2)} NGN</span>
+              ) : (
+                <span className="font-medium">Rate unavailable</span>
+              )}
+>>>>>>> acbd18f (stashed 2)
             </div>
             <div className="flex justify-between text-xs text-slate-500">
               <span className="flex items-center gap-1">Network Fee <Info size={10} /></span>
