@@ -7,7 +7,6 @@ import { GalleryPage } from './components/GalleryPage';
 import { SwapPage } from './components/SwapPage';
 import { BeneficiariesPage } from './components/BeneficiariesPage';
 import { ActivityPage } from './components/ActivityPage';
-import { DexPage } from './components/DexPage';
 import { Button } from './components/Button';
 import { LogOut, Menu, Globe, ChevronDown } from 'lucide-react';
 import { Tooltip } from './components/Tooltip';
@@ -16,10 +15,13 @@ import { useDisconnectWallet, useSuiClient } from '@mysten/dapp-kit';
 import { Toaster } from 'react-hot-toast';
 // Import the useContacts hook
 import { useContacts } from './hooks/useContacts';
+// Add missing imports
+import { FiatSwapPage } from './components/FiatSwapPage';
+import { DexPage } from './components/DexPage';
 
 const App: React.FC = () => {
   const [isConnected, setIsConnected] = useState(false);
-  const [currentView, setCurrentView] = useState<'chat' | 'mint' | 'gallery' | 'swap' | 'beneficiaries' | 'activity' | 'dex'>('chat');
+  const [currentView, setCurrentView] = useState('chat'); // 'chat' | 'mint' | 'gallery' | 'swap' | 'beneficiaries' | 'activity'
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [network, setNetwork] = useState<'mainnet' | 'testnet'>(() => {
@@ -38,6 +40,21 @@ const App: React.FC = () => {
   useEffect(() => {
     console.log("App contacts updated:", contacts);
   }, [contacts]);
+
+  // Listen for navigation events from ChatArea
+  useEffect(() => {
+    const handleNavigation = (event: CustomEvent) => {
+      const view = event.detail;
+      if (view) {
+        setCurrentView(view);
+      }
+    };
+
+    window.addEventListener('navigateTo', handleNavigation as EventListener);
+    return () => {
+      window.removeEventListener('navigateTo', handleNavigation as EventListener);
+    };
+  }, []);
 
   if (!currentAccount) {
     return <LandingPage onConnect={() => setIsConnected(true)} />;
@@ -93,6 +110,7 @@ const App: React.FC = () => {
                         {currentView === 'chat' ? (selectedChatId ? 'Chat History' : 'Conversational Interface') : 
                          currentView === 'mint' ? 'Minting Studio' : 
                          currentView === 'swap' ? 'Asset Swap' : 
+                         currentView === 'fiat-swap' ? 'Convert to Naira' : 
                          currentView === 'beneficiaries' ? 'Contact Management' : 
                          currentView === 'dex' ? 'DEX Platforms' : 
                          currentView === 'activity' ? 'History' : 'Digital Assets'}
@@ -155,14 +173,8 @@ const App: React.FC = () => {
          {currentView === 'mint' && <MintPage />}
          {currentView === 'gallery' && <GalleryPage />}
          {currentView === 'swap' && <SwapPage />}
-         {currentView === 'beneficiaries' && <BeneficiariesPage 
-           contacts={contacts} 
-           addContact={addContact} 
-           deleteContact={deleteContact} 
-           loading={loading}
-           error={error}
-           refetch={refetch}
-         />}
+         {currentView === 'fiat-swap' && <FiatSwapPage />}
+         {currentView === 'beneficiaries' && <BeneficiariesPage contacts={contacts} addContact={addContact} deleteContact={deleteContact} />}
          {currentView === 'activity' && <ActivityPage onSelectSession={handleSelectSession} />}
          {currentView === 'dex' && <DexPage />}
       </div>

@@ -565,6 +565,22 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ sessionId, contacts, resolve
                 timestamp: new Date() 
               }]);
               return;
+            } else if (data.action === "swap_to_fiat") {
+              const botText = data.reply || "Converting crypto to Nigerian Naira and sending to your bank. Please confirm the details in the Convert to Naira section.";
+              setMessages(prev => [...prev, { 
+                id: Date.now().toString(), 
+                sender: Sender.Bot, 
+                type: MessageType.Text, 
+                text: botText,
+                timestamp: new Date() 
+              }]);
+              
+              // Navigate to the fiat swap page
+              setTimeout(() => {
+                const event = new CustomEvent('navigateTo', { detail: 'fiat-swap' });
+                window.dispatchEvent(event);
+              }, 1000);
+              return;
             } else {
               const botText = data.reply || data.message || "I'm not sure how to help with that.";
               setMessages(prev => [...prev, { 

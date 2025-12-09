@@ -25,6 +25,22 @@ module milo_nft::nft_module {
         blob_id: String,
     }
 
+    public fun get_name(nft: &MiloNFT): String {
+        nft.metadata.name
+    }
+
+    public fun get_description(nft: &MiloNFT): String {
+        nft.metadata.description
+    }
+
+    public fun get_blob_id(nft: &MiloNFT): String {
+        nft.blob_id
+    }
+
+    public fun get_creator(nft: &MiloNFT): address {
+        nft.creator
+    }
+
     public entry fun mint(
         name: String,
         description: String,

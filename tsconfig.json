@@ -33,6 +33,7 @@
     "hooks/**/*",
     "AI/**/*",
     "services/**/*",
+    "swap/**/*",
     "types/**/*",
     "main.tsx",
     "App.tsx",

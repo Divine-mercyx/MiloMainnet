@@ -75,6 +75,19 @@ export const DataService = {
     return PRICES[s] || 0;
   },
 
+  // Fetch real-time USD to NGN exchange rate from exchangerate-api.com
+  async getUsdToNgnRate(): Promise<number> {
+    try {
+      const res = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+      if (!res.ok) throw new Error('Failed to fetch exchange rate');
+      const data = await res.json();
+      return data.rates.NGN || 1500; // Fallback to 1500 if NGN rate not found
+    } catch (e) {
+      console.warn("Error fetching USD to NGN rate, using fallback", e);
+      return 1500; // Fallback rate
+    }
+  },
+
   // Fetch live lending rates from DefiLlama
   async getLendingRates(): Promise<LendingOpportunity[]> {
     try {
