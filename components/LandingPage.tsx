@@ -252,11 +252,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onConnect }) => {
           <div className="flex items-center gap-2.5 cursor-pointer group">
             <div className="relative">
                 <div className="absolute inset-0 bg-teal-400 blur-lg opacity-0 group-hover:opacity-30 transition-opacity rounded-full duration-500"></div>
-                <div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-[#0F172A] to-[#334155] flex items-center justify-center text-white shadow-lg shadow-slate-900/10 ring-1 ring-white/20 group-hover:scale-105 transition-transform duration-300">
+                {/* <div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-[#0F172A] to-[#334155] flex items-center justify-center text-white shadow-lg shadow-slate-900/10 ring-1 ring-white/20 group-hover:scale-105 transition-transform duration-300">
                   <Box size={20} strokeWidth={2.5} className="text-teal-400" />
-                </div>
+                </div> */}
             </div>
-            <span className="text-xl font-bold tracking-tight text-slate-900 group-hover:text-teal-600 transition-colors">MYLO</span>
+            <span className="text-xl font-bold tracking-tight text-slate-900 group-hover:text-teal-600 transition-colors">Mylo</span>
           </div>
 
           {/* Centered Pill Navigation */}
@@ -384,7 +384,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onConnect }) => {
                     Not a bank.<br />
                     <span className="relative inline-block">
                         <span className="absolute -inset-1 bg-gradient-to-r from-teal-100 to-indigo-100 blur-xl opacity-50"></span>
-                        <span className="relative bg-clip-text text-transparent bg-gradient-to-r from-[#2C7A7B] via-[#3B8D85] to-indigo-600">Smarter than a wallet.</span>
+                        <span className="relative bg-clip-text text-transparent bg-gradient-to-r from-[#2C7A7B] via-[#1A5F60] to-[#154A4B]">Smarter than a wallet.</span>
                     </span>
                 </h1>
 
@@ -392,7 +392,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onConnect }) => {
                     className="text-xl md:text-2xl text-slate-500 mb-10 max-w-2xl mx-auto font-light leading-relaxed"
                     style={{ transform: `translate(${mousePos.x * 10}px, ${mousePos.y * 10}px)` }}
                 >
-                    The first AI wallet that speaks your language. <br className="hidden md:block" />
+                    The first Sui wallet that speaks your language. <br className="hidden md:block" />
                     <span className="text-slate-800 font-medium">Swap, mint, and manage assets on Sui</span> with simple conversation.
                 </p>
 

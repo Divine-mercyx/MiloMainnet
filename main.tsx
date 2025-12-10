@@ -35,6 +35,7 @@ const AppWithNetworkSwitching = () => {
     };
   }, []);
 
+
   return (
     <QueryClientProvider client={queryClient}>
       <SuiClientProvider 
