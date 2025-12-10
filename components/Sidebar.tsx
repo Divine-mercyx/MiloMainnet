@@ -107,7 +107,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpe
           <div className="px-6 mb-8 flex items-center justify-between">
             <div className="flex items-center gap-2 text-[#3B8D85]">
               <div className="w-8 h-8 rounded-full bg-[#3B8D85]/10 flex items-center justify-center">
-                <Box size={20} strokeWidth={2.5} />
+                {/* <Box size={20} strokeWidth={2.5} /> */}
               </div>
               <span className="text-xl font-bold tracking-tight text-slate-800">MYLO</span>
             </div>

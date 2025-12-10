@@ -2,7 +2,7 @@
   "name": "mylo-conversational-wallet",
   "private": true,
   "version": "0.0.0",
-  "type": "module",
+  "type": "commonjs",
   "scripts": {
     "dev": "vite",
     "dev:full": "concurrently \"npm run dev\"",
@@ -20,8 +20,8 @@
     "bn.js": "^5.2.2",
     "cors": "^2.8.5",
     "express": "^4.18.2",
-    "lucide-react": "^0.556.0",
     "paystack": "^2.0.1",
+    "lucide-react": "^0.556.0",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
     "react-hot-toast": "^2.6.0",
