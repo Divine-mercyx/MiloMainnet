@@ -22,7 +22,7 @@ const queryClient = new QueryClient();
 
 // Create a component to handle network switching
 const AppWithNetworkSwitching = () => {
-  const [activeNetwork, setActiveNetwork] = useState<'mainnet' | 'testnet' | 'devnet' | 'localnet'>('testnet');
+  const [activeNetwork, setActiveNetwork] = useState<'mainnet' | 'testnet' | 'devnet' | 'localnet'>('mainnet');
 
   useEffect(() => {
     const handleNetworkChange = (event: CustomEvent) => {
@@ -34,6 +34,7 @@ const AppWithNetworkSwitching = () => {
       window.removeEventListener('networkChange', handleNetworkChange as EventListener);
     };
   }, []);
+
 
   return (
     <QueryClientProvider client={queryClient}>
