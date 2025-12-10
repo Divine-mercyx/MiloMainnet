@@ -147,7 +147,7 @@ export const DexPage: React.FC = () => {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
           <div>
             <h1 className="text-2xl font-bold text-slate-800">Aggregated Markets</h1>
-            <p className="text-slate-500">Explore decentralized lending and borrowing opportunities</p>
+            <p className="text-slate-500">Explore APY rates and liquidity across decentralized protocols</p>
           </div>
           <div className="flex items-center gap-3">
             <div className="text-sm text-slate-500">
@@ -241,7 +241,7 @@ export const DexPage: React.FC = () => {
                     </div>
                   </th>
                   <th className="text-right py-4 px-6 text-xs font-semibold text-slate-400 uppercase tracking-wider">Trend</th>
-                  <th className="text-right py-4 px-6 text-xs font-semibold text-slate-400 uppercase tracking-wider">Action</th>
+                  <th className="text-right py-4 px-6 text-xs font-semibold text-slate-400 uppercase tracking-wider">Details</th>
                 </tr>
               </thead>
               <tbody>
@@ -260,7 +260,17 @@ export const DexPage: React.FC = () => {
                         </div>
                       </td>
                       <td className="py-4 px-6">
-                        <div className="font-medium text-slate-800">{opportunity.platform}</div>
+                        <div className="font-medium text-slate-800">
+                          {opportunity.platform === 'Scallop' ? (
+                            <a href="https://app.scallop.io/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{opportunity.platform}</a>
+                          ) : opportunity.platform === 'Navi' ? (
+                            <a href="https://app.naviprotocol.io/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{opportunity.platform}</a>
+                          ) : opportunity.platform === 'Suilend' ? (
+                            <a href="https://suilend.fi/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{opportunity.platform}</a>
+                          ) : (
+                            opportunity.platform
+                          )}
+                        </div>
                       </td>
                       <td className="py-4 px-6 text-right">
                         <div className="font-medium text-slate-800">{formatPercent(opportunity.apy)}</div>
@@ -274,9 +284,17 @@ export const DexPage: React.FC = () => {
                         </div>
                       </td>
                       <td className="py-4 px-6 text-right">
-                        <Button variant="primary" size="sm">
-                          Lend
-                        </Button>
+                        <div className="text-sm text-slate-500">
+                          {opportunity.platform === 'Scallop' ? (
+                            <a href="https://app.scallop.io/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Visit Scallop</a>
+                          ) : opportunity.platform === 'Navi' ? (
+                            <a href="https://app.naviprotocol.io/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Visit Navi</a>
+                          ) : opportunity.platform === 'Suilend' ? (
+                            <a href="https://suilend.fi/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Visit Suilend</a>
+                          ) : (
+                            <span>Visit platform</span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))
