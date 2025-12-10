@@ -223,7 +223,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpe
                 onClick={() => handleNavClick('beneficiaries')}
             />
             
-            <div className="pt-4 pb-2">
+            {/* <div className="pt-4 pb-2">
                <p className="px-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">DeFi</p>
             </div>
             <NavItem 
@@ -232,7 +232,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpe
                 description="Decentralized lending and borrowing opportunities"
                 active={currentView === 'dex'}
                 onClick={() => handleNavClick('dex')}
-            />
+            /> */}
           </nav>
         </div>
       </div>
