@@ -6,9 +6,8 @@ import { useCurrentAccount, useSuiClient, useSignTransaction } from '@mysten/dap
 import { DataService } from '../services/dataService';
 import { OnChainTransactionService } from '../services/onChainTransactionService';
 import { TransactionHistory } from '../types/types';
+import { SwapProcessor } from '../swap/swapProcessor'; // Add this import
 import toast from 'react-hot-toast';
-import { SwapProcessor } from '@/swap/swapProcessor';
-
 interface Bank {
   id: number;
   name: string;
@@ -61,7 +60,6 @@ export const SwapPage: React.FC = () => {
   const currentAccount = useCurrentAccount();
   const suiClient = useSuiClient();
   const { mutate: signTransaction } = useSignTransaction();
-  
 
   // Fetch user's SUI balance
   useEffect(() => {
@@ -112,14 +110,42 @@ export const SwapPage: React.FC = () => {
   useEffect(() => {
     const fetchBanks = async () => {
       try {
-        const response = await fetch('https://api.paystack.co/bank?country=nigeria');
+        const paystackKey = import.meta.env.VITE_PAYSTACK_SECRET_KEY || 'sk_test_7aab64a468bed7aeac7b4d1ccafcd2e111b0fae8';
+        
+        if (!paystackKey || paystackKey === 'undefined') {
+          console.warn('No Paystack API key found, using default bank list for testing');
+          setBanks([
+            { id: 1, name: 'Test Bank', code: '001', slug: 'test-bank' },
+            { id: 2, name: 'Access Bank', code: '044', slug: 'access-bank' },
+            { id: 3, name: 'GTBank', code: '058', slug: 'gtbank' }
+          ]);
+          return;
+        }
+        
+        const response = await fetch('https://api.paystack.co/bank?country=nigeria', {
+          headers: {
+            'Authorization': `Bearer ${paystackKey}`
+          }
+        });
         
         if (response.ok) {
           const data = await response.json();
           setBanks(data.data);
+        } else {
+          console.warn('Could not fetch banks from Paystack, using default list');
+          setBanks([
+            { id: 1, name: 'Test Bank', code: '001', slug: 'test-bank' },
+            { id: 2, name: 'Access Bank', code: '044', slug: 'access-bank' },
+            { id: 3, name: 'GTBank', code: '058', slug: 'gtbank' }
+          ]);
         }
       } catch (error) {
         console.error('Error fetching banks:', error);
+        setBanks([
+          { id: 1, name: 'Test Bank', code: '001', slug: 'test-bank' },
+          { id: 2, name: 'Access Bank', code: '044', slug: 'access-bank' },
+          { id: 3, name: 'GTBank', code: '058', slug: 'gtbank' }
+        ]);
       }
     };
 
@@ -128,11 +154,9 @@ export const SwapPage: React.FC = () => {
 
   const handleSuiAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    // Allow only numbers and decimal point
     if (/^\d*\.?\d*$/.test(value)) {
       setSuiAmount(value);
       
-      // Calculate Naira amount using real-time exchange rates
       if (value && exchangeRates.suiToUsd && exchangeRates.usdToNgn) {
         const suiValue = parseFloat(value);
         const usdValue = suiValue * exchangeRates.suiToUsd;
@@ -146,11 +170,9 @@ export const SwapPage: React.FC = () => {
 
   const handleAccountNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    // Allow only numbers
     if (/^\d*$/.test(value)) {
       setAccountNumber(value);
       
-      // Clear verification when account number changes
       if (verification) {
         setVerification(null);
         setVerificationError(null);
@@ -161,15 +183,33 @@ export const SwapPage: React.FC = () => {
   const verifyAccount = async () => {
     if (!selectedBank || !accountNumber) return;
     
+    // Auto-verify test account number immediately
+    if (accountNumber === '0000000000') {
+      setVerification({
+        account_number: accountNumber,
+        account_name: 'Test User'
+      });
+      setVerificationError(null);
+      return;
+    }
+    
     setIsVerifying(true);
     setVerificationError(null);
     
     try {
+      const paystackKey = import.meta.env.VITE_PAYSTACK_SECRET_KEY || 'sk_test_7aab64a468bed7aeac7b4d1ccafcd2e111b0fae8';
+      
+      if (!paystackKey || paystackKey === 'undefined') {
+        setVerificationError('Paystack API key not configured. Please add VITE_PAYSTACK_SECRET_KEY to your .env file.\nFor testing, use account number "0000000000" with any bank.');
+        setIsVerifying(false);
+        return;
+      }
+      
       const response = await fetch(
         `https://api.paystack.co/bank/resolve?account_number=${accountNumber}&bank_code=${selectedBank.code}`,
         {
           headers: {
-            'Authorization': `Bearer sk_test_7aab64a468bed7aeac7b4d1ccafcd2e111b0fae8`
+            'Authorization': `Bearer ${paystackKey}`
           }
         }
       );
@@ -182,24 +222,14 @@ export const SwapPage: React.FC = () => {
           account_name: data.data.account_name
         });
       } else {
-        // Handle the specific limit exceeded error
         if (data.message && data.message.includes('daily limit')) {
-          setVerificationError('Test mode limit exceeded. For testing, use account number "0000000000" with any bank.');
-          
-          // For testing purposes, we can auto-verify with mock data
-          if (accountNumber === '0000000000') {
-            setVerification({
-              account_number: accountNumber,
-              account_name: 'Test User'
-            });
-            setVerificationError(null);
-          }
+          setVerificationError('Test mode limit exceeded (3 verifications per day). Solutions:\n1. Use account number "0000000000" with any bank (auto-verified)\n2. Upgrade to live mode\n3. Try again tomorrow');
         } else {
-          setVerificationError(data.message || 'Unable to verify account');
+          setVerificationError(data.message || 'Unable to verify account. Please check account number and bank.');
         }
       }
     } catch (error) {
-      setVerificationError('Network error. Please try again.');
+      setVerificationError('Network error. Please check your connection and try again.');
       console.error('Error verifying account:', error);
     } finally {
       setIsVerifying(false);
@@ -209,7 +239,6 @@ export const SwapPage: React.FC = () => {
   const handleSwap = async () => {
     const amount = parseFloat(suiAmount);
     
-    // Check if user has sufficient balance
     if (suiBalance !== null && amount > suiBalance) {
       alert('Insufficient SUI balance');
       return;
@@ -225,16 +254,12 @@ export const SwapPage: React.FC = () => {
       return;
     }
     
-    // Check if on-chain transaction history is configured
     const packageId = import.meta.env.VITE_TRANSACTION_HISTORY_PACKAGE_ID;
     const registryId = import.meta.env.VITE_TRANSACTION_REGISTRY_ID;
     
-    // Perform the swap
     setIsSwapping(true);
-    
-    // For demo purposes, we'll simulate the swap process
+  
     setTimeout(async () => {
-      // Create mock receipt data
       const mockReceiptData: ReceiptData = {
         recipientName: verification.account_name,
         accountNumber: verification.account_number,
@@ -245,7 +270,6 @@ export const SwapPage: React.FC = () => {
         reference: `ref_${Math.random().toString(36).substr(2, 9)}`
       };
       
-      // Prepare transaction data
       const transaction: TransactionHistory = {
         id: mockReceiptData.transactionId,
         type: 'fiat_conversion',
@@ -260,7 +284,6 @@ export const SwapPage: React.FC = () => {
         status: 'completed'
       };
       
-      // Save transaction on-chain if configured
       if (packageId && registryId && packageId !== '0x_your_package_id_here') {
         try {
           const onChainService = new OnChainTransactionService(suiClient, packageId, registryId);
@@ -271,7 +294,6 @@ export const SwapPage: React.FC = () => {
             {
               onSuccess: () => {
                 toast.success('Transaction recorded on blockchain!');
-                setShowSuccessModal(true);
               },
               onError: (error: Error) => {
                 console.error('Failed to record transaction on-chain:', error);
@@ -288,6 +310,7 @@ export const SwapPage: React.FC = () => {
       }
       
       setReceiptData(mockReceiptData);
+      setShowSuccessModal(true);
       setIsSwapping(false);
       
       // Clear form fields
@@ -310,7 +333,7 @@ export const SwapPage: React.FC = () => {
     
     const text = `Transaction Receipt\n` +
       `Recipient: ${receiptData.recipientName}\n` +
-      `Amount: Γéª${receiptData.amount.toFixed(2)}\n` +
+      `Amount: ₦${receiptData.amount.toFixed(2)}\n` +
       `Bank: ${receiptData.bankName}\n` +
       `Date: ${receiptData.transactionDate.toLocaleString()}\n` +
       `Transaction ID: ${receiptData.transactionId}`;
@@ -343,7 +366,7 @@ export const SwapPage: React.FC = () => {
       `Recipient: ${receiptData.recipientName}\n` +
       `Account Number: ${receiptData.accountNumber}\n` +
       `Bank: ${receiptData.bankName}\n` +
-      `Amount: Γéª${receiptData.amount.toFixed(2)}\n` +
+      `Amount: ₦${receiptData.amount.toFixed(2)}\n` +
       `Transaction Date: ${receiptData.transactionDate.toLocaleString()}\n` +
       `Transaction ID: ${receiptData.transactionId}\n` +
       `Reference: ${receiptData.reference}\n\n` +
@@ -433,7 +456,7 @@ export const SwapPage: React.FC = () => {
               </div>
             </div>
             <div className="mt-2 text-xs text-slate-400">
-              ~Γéª{nairaAmount || '0.00'}
+              ~₦{nairaAmount || '0.00'} NGN
             </div>
           </div>
 
@@ -522,7 +545,7 @@ export const SwapPage: React.FC = () => {
           <div className="px-6 py-4 border-t border-slate-100 bg-white">
             <div className="flex justify-between text-xs text-slate-500 mb-2">
               <span className="flex items-center gap-1">Rate <Info size={10} /></span>
-              <span className="font-medium">1 SUI Γëê Γéª{getCurrentExchangeRate().toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+              <span className="font-medium">1 SUI ≈ ₦{getCurrentExchangeRate().toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
             </div>
             <div className="flex justify-between text-xs text-slate-500">
               <span className="flex items-center gap-1">Network Fee <Info size={10} /></span>
@@ -568,7 +591,7 @@ export const SwapPage: React.FC = () => {
                     <div className="font-medium text-slate-800 truncate">{receiptData.recipientName}</div>
                     
                     <div className="text-slate-500">Amount</div>
-                    <div className="font-medium text-slate-800">Γéª{receiptData.amount.toFixed(2)}</div>
+                    <div className="font-medium text-slate-800">₦{receiptData.amount.toFixed(2)}</div>
                     
                     <div className="text-slate-500">Bank</div>
                     <div className="font-medium text-slate-800">{receiptData.bankName}</div>

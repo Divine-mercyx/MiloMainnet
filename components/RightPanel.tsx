@@ -20,12 +20,10 @@ export const RightPanel: React.FC = () => {
   const suiClient = useSuiClient();
 
   useEffect(() => {
-    // Load initial data
     const loadData = async () => {
       const history = ExchangeRateService.getRateHistory();
       setExchangeRateData(history);
       
-      // Load transactions from blockchain
       if (currentAccount?.address) {
         const packageId = import.meta.env.VITE_TRANSACTION_HISTORY_PACKAGE_ID;
         const registryId = import.meta.env.VITE_TRANSACTION_REGISTRY_ID;
@@ -41,7 +39,6 @@ export const RightPanel: React.FC = () => {
         }
       }
       
-      // Calculate rate change
       if (history.length > 1) {
         const latest = history[history.length - 1];
         const previous = history[0];
@@ -53,7 +50,6 @@ export const RightPanel: React.FC = () => {
 
     loadData();
 
-    // Fetch and save exchange rate data every 5 minutes
     const fetchAndSaveRate = async () => {
       try {
         const [suiPrice, ngnRate] = await Promise.all([
@@ -71,12 +67,10 @@ export const RightPanel: React.FC = () => {
 
         ExchangeRateService.saveRatePoint(point);
         
-        // Update state
         const updatedHistory = ExchangeRateService.getRateHistory();
         setExchangeRateData(updatedHistory);
         setCurrentRate(rate);
 
-        // Calculate rate change
         if (updatedHistory.length > 1) {
           const latest = updatedHistory[updatedHistory.length - 1];
           const previous = updatedHistory[0];
@@ -88,13 +82,10 @@ export const RightPanel: React.FC = () => {
       }
     };
 
-    // Fetch initial rate
     fetchAndSaveRate();
 
-    // Update every 5 minutes
-    const rateInterval = setInterval(fetchAndSaveRate, 5 * 60 * 1000);
+    const rateInterval = setInterval(fetchAndSaveRate, 30 * 60 * 1000);
     
-    // Refresh transactions every 30 seconds (blockchain data)
     const txInterval = setInterval(async () => {
       if (currentAccount?.address) {
         const packageId = import.meta.env.VITE_TRANSACTION_HISTORY_PACKAGE_ID;

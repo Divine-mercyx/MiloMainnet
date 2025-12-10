@@ -5,10 +5,27 @@ export class PayoutService {
   private paystack: any;
   
   constructor() {
-    // Initialize Paystack with secret key from environment variables
-    const Paystack = require('paystack');
-    // Use the PAYSTACK_SECRET_KEY from environment variables
-    this.paystack = new Paystack(import.meta.env.PAYSTACK_SECRET_KEY || process.env.PAYSTACK_SECRET_KEY || 'sk_test_your_secret_key_here');
+    // Paystack will be initialized lazily when needed
+    this.paystack = null;
+  }
+  
+  /**
+   * Initialize Paystack with secret key from environment variables
+   * This is done lazily to avoid issues with require in browser environments
+   */
+  private async initializePaystack() {
+    if (this.paystack) return;
+    
+    try {
+      // Dynamically import paystack only when needed
+      const paystackModule = await import('paystack');
+      const Paystack = paystackModule.default;
+      // Use the PAYSTACK_SECRET_KEY from environment variables
+      this.paystack = new Paystack(import.meta.env.PAYSTACK_SECRET_KEY || process.env.PAYSTACK_SECRET_KEY || 'sk_test_your_secret_key_here');
+    } catch (error) {
+      console.error('Failed to initialize Paystack:', error);
+      throw new Error('Paystack initialization failed. Payout functionality will not be available.');
+    }
   }
   
   /**
@@ -30,6 +47,9 @@ export class PayoutService {
     };
   }> {
     try {
+      // Initialize Paystack if not already done
+      await this.initializePaystack();
+      
       // Validate inputs
       if (!accountNumber || !bankCode || amount <= 0 || !recipientName) {
         return {
