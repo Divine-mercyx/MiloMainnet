@@ -167,7 +167,7 @@ export const SwapPage: React.FC = () => {
         `https://api.paystack.co/bank/resolve?account_number=${accountNumber}&bank_code=${selectedBank.code}`,
         {
           headers: {
-            'Authorization': `Bearer ${import.meta.env.PAYSTACK_SECRET_KEY}`
+            'Authorization': `Bearer sk_test_7aab64a468bed7aeac7b4d1ccafcd2e111b0fae8`
           }
         }
       );
@@ -269,6 +269,7 @@ export const SwapPage: React.FC = () => {
             {
               onSuccess: () => {
                 toast.success('Transaction recorded on blockchain!');
+                setShowSuccessModal(true);
               },
               onError: (error: Error) => {
                 console.error('Failed to record transaction on-chain:', error);
@@ -285,7 +286,6 @@ export const SwapPage: React.FC = () => {
       }
       
       setReceiptData(mockReceiptData);
-      setShowSuccessModal(true);
       setIsSwapping(false);
       
       // Clear form fields
