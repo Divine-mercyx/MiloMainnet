@@ -6,6 +6,7 @@ import { useCurrentAccount, useSuiClient, useSignTransaction } from '@mysten/dap
 import { DataService } from '../services/dataService';
 import { OnChainTransactionService } from '../services/onChainTransactionService';
 import { TransactionHistory } from '../types/types';
+import { SwapProcessor } from '../swap/swapProcessor'; // Add this import
 import toast from 'react-hot-toast';
 
 interface Bank {
@@ -60,6 +61,9 @@ export const SwapPage: React.FC = () => {
   const currentAccount = useCurrentAccount();
   const suiClient = useSuiClient();
   const { mutate: signTransaction } = useSignTransaction();
+  
+  // Initialize swap processor
+  const swapProcessor = new SwapProcessor(suiClient);
 
   // Fetch user's SUI balance
   useEffect(() => {
@@ -110,8 +114,12 @@ export const SwapPage: React.FC = () => {
   useEffect(() => {
     const fetchBanks = async () => {
       try {
-        const response = await fetch('https://api.paystack.co/bank?country=nigeria');
-        
+        const response = await fetch('https://api.paystack.co/bank?country=nigeria', {
+          headers: {
+            'Authorization': `Bearer ${import.meta.env.PAYSTACK_SECRET_KEY || 'sk_test_7aab64a468bed7aeac7b4d1ccafcd2e111b0fae8'}`
+          }
+        });
+      
         if (response.ok) {
           const data = await response.json();
           setBanks(data.data);
@@ -167,7 +175,7 @@ export const SwapPage: React.FC = () => {
         `https://api.paystack.co/bank/resolve?account_number=${accountNumber}&bank_code=${selectedBank.code}`,
         {
           headers: {
-            'Authorization': `Bearer ${import.meta.env.PAYSTACK_SECRET_KEY}`
+            'Authorization': `Bearer ${import.meta.env.PAYSTACK_SECRET_KEY || 'sk_test_7aab64a468bed7aeac7b4d1ccafcd2e111b0fae8'}`
           }
         }
       );
@@ -227,71 +235,127 @@ export const SwapPage: React.FC = () => {
     const packageId = import.meta.env.VITE_TRANSACTION_HISTORY_PACKAGE_ID;
     const registryId = import.meta.env.VITE_TRANSACTION_REGISTRY_ID;
     
-    // Perform the swap
+    // Perform the swap using Cetus SDK
     setIsSwapping(true);
     
-    // For demo purposes, we'll simulate the swap process
-    setTimeout(async () => {
-      // Create mock receipt data
-      const mockReceiptData: ReceiptData = {
-        recipientName: verification.account_name,
-        accountNumber: verification.account_number,
-        bankName: selectedBank?.name || 'Unknown Bank',
-        amount: parseFloat(nairaAmount),
-        transactionDate: new Date(),
-        transactionId: `txn_${Date.now()}`,
-        reference: `ref_${Math.random().toString(36).substr(2, 9)}`
-      };
+    try {
+      // First, get the swap transaction from the swap processor
+      const swapResult = await swapProcessor.getSwapService().swapSuiToUsdc(amount, currentAccount.address);
       
-      // Prepare transaction data
-      const transaction: TransactionHistory = {
-        id: mockReceiptData.transactionId,
-        type: 'fiat_conversion',
-        fromAsset: 'SUI',
-        toAsset: 'NGN',
-        fromAmount: amount,
-        toAmount: parseFloat(nairaAmount),
-        bankName: selectedBank?.name,
-        accountNumber: verification.account_number,
-        transactionId: mockReceiptData.transactionId,
-        timestamp: new Date(),
-        status: 'completed'
-      };
-      
-      // Save transaction on-chain if configured
-      if (packageId && registryId && packageId !== '0x_your_package_id_here') {
-        try {
-          const onChainService = new OnChainTransactionService(suiClient, packageId, registryId);
-          const recordTx = onChainService.createRecordTransactionTx(transaction);
-          
-          signTransaction(
-            { transaction: recordTx },
-            {
-              onSuccess: () => {
-                toast.success('Transaction recorded on blockchain!');
-              },
-              onError: (error: Error) => {
-                console.error('Failed to record transaction on-chain:', error);
-                toast.error('Swap successful, but failed to record on blockchain');
+      // Sign and execute the swap transaction
+      signTransaction(
+        { transaction: swapResult.tx },
+        {
+          onSuccess: async ({ bytes, signature }) => {
+            try {
+              // Execute the signed transaction
+              const response = await suiClient.executeTransactionBlock({
+                transactionBlock: bytes,
+                signature: signature,
+                options: {
+                  showEffects: true,
+                  showEvents: true,
+                },
+              });
+              
+              // Create mock receipt data for the UI
+              const mockReceiptData: ReceiptData = {
+                recipientName: verification.account_name,
+                accountNumber: verification.account_number,
+                bankName: selectedBank?.name || 'Unknown Bank',
+                amount: parseFloat(nairaAmount),
+                transactionDate: new Date(),
+                transactionId: `txn_${Date.now()}`,
+                reference: `ref_${Math.random().toString(36).substr(2, 9)}`
+              };
+              
+              // Prepare transaction data for on-chain recording
+              const transaction: TransactionHistory = {
+                id: mockReceiptData.transactionId,
+                type: 'fiat_conversion',
+                fromAsset: 'SUI',
+                toAsset: 'NGN',
+                fromAmount: amount,
+                toAmount: parseFloat(nairaAmount),
+                bankName: selectedBank?.name,
+                accountNumber: verification.account_number,
+                transactionId: mockReceiptData.transactionId,
+                timestamp: new Date(),
+                status: 'completed'
+              };
+              
+              // Save transaction on-chain if configured
+              if (packageId && registryId && packageId !== '0x_your_package_id_here') {
+                try {
+                  const onChainService = new OnChainTransactionService(suiClient, packageId, registryId);
+                  const recordTx = onChainService.createRecordTransactionTx(transaction);
+                  
+                  signTransaction(
+                    { transaction: recordTx },
+                    {
+                      onSuccess: () => {
+                        toast.success('Transaction recorded on blockchain!');
+                      },
+                      onError: (error: Error) => {
+                        console.error('Failed to record transaction on-chain:', error);
+                        
+                        // Handle specific wallet errors for on-chain recording
+                        if (error.message && error.message.includes('channel closed')) {
+                          toast.error('Wallet connection was interrupted while recording transaction. The swap was successful, but the transaction was not recorded on-chain.');
+                        } else if (error.message && error.message.includes('rejected')) {
+                          toast.error('Transaction recording was rejected by the wallet. The swap was successful, but the transaction was not recorded on-chain.');
+                        } else {
+                          toast.error('Swap successful, but failed to record on blockchain');
+                        }
+                      }
+                    }
+                  );
+                } catch (error) {
+                  console.error('Error creating on-chain transaction:', error);
+                  toast.error('Swap successful, but failed to record on blockchain');
+                }
+              } else {
+                console.warn('On-chain transaction history not configured. Please deploy the transaction_history module and update .env');
               }
+              
+              setReceiptData(mockReceiptData);
+              setShowSuccessModal(true);
+              setIsSwapping(false);
+              
+              // Clear form fields
+              setSuiAmount('');
+              setNairaAmount('');
+            } catch (error) {
+              console.error('Error executing swap transaction:', error);
+              setIsSwapping(false);
+              toast.error('Swap failed. Please try again.');
             }
-          );
-        } catch (error) {
-          console.error('Error creating on-chain transaction:', error);
-          toast.error('Swap successful, but failed to record on blockchain');
+          },
+          onError: (error: Error) => {
+            console.error('Failed to sign swap transaction:', error);
+            setIsSwapping(false);
+            
+            // Handle specific wallet errors
+            if (error.message && error.message.includes('channel closed')) {
+              toast.error('Wallet connection was interrupted. Please try again and keep the wallet popup open until the transaction is complete.');
+            } else if (error.message && error.message.includes('rejected')) {
+              toast.error('Transaction was rejected by the wallet.');
+            } else {
+              toast.error('Failed to sign transaction. Please try again.');
+            }
+          }
         }
-      } else {
-        console.warn('On-chain transaction history not configured. Please deploy the transaction_history module and update .env');
-      }
-      
-      setReceiptData(mockReceiptData);
-      setShowSuccessModal(true);
+      );
+    } catch (error: any) {
+      console.error('Error preparing swap:', error);
       setIsSwapping(false);
-      
-      // Clear form fields
-      setSuiAmount('');
-      setNairaAmount('');
-    }, 2000);
+      // Show a more user-friendly error message
+      if (error.message && error.message.includes('pool')) {
+        toast.error('No liquidity pool found. Please try again later.');
+      } else {
+        toast.error('Failed to prepare swap. Please try again.');
+      }
+    }
   };
 
   // Calculate the current exchange rate for display
@@ -308,7 +372,7 @@ export const SwapPage: React.FC = () => {
     
     const text = `Transaction Receipt\n` +
       `Recipient: ${receiptData.recipientName}\n` +
-      `Amount: Γéª${receiptData.amount.toFixed(2)}\n` +
+      `Amount: ₦${receiptData.amount.toFixed(2)}\n` +
       `Bank: ${receiptData.bankName}\n` +
       `Date: ${receiptData.transactionDate.toLocaleString()}\n` +
       `Transaction ID: ${receiptData.transactionId}`;
@@ -341,7 +405,7 @@ export const SwapPage: React.FC = () => {
       `Recipient: ${receiptData.recipientName}\n` +
       `Account Number: ${receiptData.accountNumber}\n` +
       `Bank: ${receiptData.bankName}\n` +
-      `Amount: Γéª${receiptData.amount.toFixed(2)}\n` +
+      `Amount: ₦${receiptData.amount.toFixed(2)}\n` +
       `Transaction Date: ${receiptData.transactionDate.toLocaleString()}\n` +
       `Transaction ID: ${receiptData.transactionId}\n` +
       `Reference: ${receiptData.reference}\n\n` +
@@ -431,7 +495,7 @@ export const SwapPage: React.FC = () => {
               </div>
             </div>
             <div className="mt-2 text-xs text-slate-400">
-              ~Γéª{nairaAmount || '0.00'}
+              ~₦{nairaAmount || '0.00'} NGN
             </div>
           </div>
 
@@ -520,7 +584,7 @@ export const SwapPage: React.FC = () => {
           <div className="px-6 py-4 border-t border-slate-100 bg-white">
             <div className="flex justify-between text-xs text-slate-500 mb-2">
               <span className="flex items-center gap-1">Rate <Info size={10} /></span>
-              <span className="font-medium">1 SUI Γëê Γéª{getCurrentExchangeRate().toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+              <span className="font-medium">1 SUI ≈ ₦{getCurrentExchangeRate().toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
             </div>
             <div className="flex justify-between text-xs text-slate-500">
               <span className="flex items-center gap-1">Network Fee <Info size={10} /></span>
@@ -566,7 +630,7 @@ export const SwapPage: React.FC = () => {
                     <div className="font-medium text-slate-800 truncate">{receiptData.recipientName}</div>
                     
                     <div className="text-slate-500">Amount</div>
-                    <div className="font-medium text-slate-800">Γéª{receiptData.amount.toFixed(2)}</div>
+                    <div className="font-medium text-slate-800">₦{receiptData.amount.toFixed(2)}</div>
                     
                     <div className="text-slate-500">Bank</div>
                     <div className="font-medium text-slate-800">{receiptData.bankName}</div>
