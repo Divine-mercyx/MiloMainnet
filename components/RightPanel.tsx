@@ -190,14 +190,20 @@ export const RightPanel: React.FC = () => {
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
             <div className="relative">
-                <div className="w-10 h-10 rounded-full bg-slate-200 overflow-hidden border-2 border-white shadow-sm">
-                    <img src="https://picsum.photos/100/100" alt="Avatar" className="w-full h-full object-cover" />
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-400 to-indigo-600 flex items-center justify-center text-white font-bold text-sm">
+                  {currentAccount?.address ? currentAccount.address.substring(0, 2).toUpperCase() : '0x'}
                 </div>
                 <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
             </div>
             <div>
-                <span className="text-sm font-bold text-slate-800 block">Reon Ucst</span>
-                <span className="text-[10px] text-slate-500 font-medium bg-slate-100 px-1.5 py-0.5 rounded-md">@reon_u</span>
+                <span className="text-sm font-bold text-slate-800 block">
+                  {currentAccount?.address 
+                    ? `${currentAccount.address.substring(0, 6)}...${currentAccount.address.substring(currentAccount.address.length - 4)}`
+                    : 'Not Connected'}
+                </span>
+                <span className="text-[10px] text-slate-500 font-medium bg-slate-100 px-1.5 py-0.5 rounded-md">
+                  {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
             </div>
         </div>
         <Tooltip content="Account Options" position="left">
