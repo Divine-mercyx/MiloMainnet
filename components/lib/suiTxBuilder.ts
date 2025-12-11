@@ -68,7 +68,7 @@ function buildMintTx(
 ) {
   if(!blobId)throw new Error("Asset id is required for minting");
   txb.moveCall({
-    target: "0x65d223eb2c238ff52ddb179af628b5608cdc4e34739698fbde316f47f2ab480d::nft_module::mint",
+    target: "0x25bffef941168af0c96a8e934a3eca8986d2fe38cab832c817de87873e486f65::nft_module::mint",
     arguments: [
       txb.pure.string(name),
       txb.pure.string(description),

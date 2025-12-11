@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Transaction } from "@mysten/sui/transactions";
 
 // Package ID for the contacts module
-const CONTACTS_PACKAGE_ID = "0x29d07d06afb4c8e90f89231e4bf4fdac27b4ca504a9b0e697ca00cbe01a0e46c";
+const CONTACTS_PACKAGE_ID = "0x25bffef941168af0c96a8e934a3eca8986d2fe38cab832c817de87873e486f65";
 
 export type Contact = {
     id: string;

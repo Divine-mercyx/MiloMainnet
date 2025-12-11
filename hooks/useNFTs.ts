@@ -33,7 +33,7 @@ export function useNFTs() {
       const response = await suiClient.getOwnedObjects({
         owner: currentAccount.address,
         filter: {
-          StructType: "0x65d223eb2c238ff52ddb179af628b5608cdc4e34739698fbde316f47f2ab480d::nft_module::MiloNFT"
+          StructType: "0x25bffef941168af0c96a8e934a3eca8986d2fe38cab832c817de87873e486f65::nft_module::MiloNFT"
         },
         options: {
           showContent: true,
